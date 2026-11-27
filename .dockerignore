@@ -5,7 +5,7 @@ jobs
 **/__pycache__
 **/.DS_Store
 *.md
-# local only, same as .gitignore: never sent to the image build
+# local only
 .claude
 CLAUDE.local.md
 *.env

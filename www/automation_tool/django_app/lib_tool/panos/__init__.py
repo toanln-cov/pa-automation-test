@@ -1,30 +1,27 @@
 # PAN-OS API by firewall version.
 #
-# After the API key, the PAN-OS version of each firewall is read (show system info) and the matching class is
-# chosen ONCE per firewall and per job: exact 'major.minor' -> 'major' -> DEFAULT (PanOS11_1). Every request to that
-# firewall then goes through its object (same HTTPS session = TLS connection reused).
-# A version class holds the API AND the field rules of that version (limits of names, descriptions, allowed values...).
+# class chosen once per firewall and job: major.minor, then major, then DEFAULT
+# a version class holds the API and the field rules of its version
 #
 # New version:
 #   1. lib_tool/panos/v12_1.py:  from .v11_1 import PanOS11_1
-#                                class PanOS12_1(PanOS11_1):      # override ONLY what differs from 11.1
-#                                    NAME_MAX = 127               #   a field rule (attribute, see PanOS11_1)
-#                                    def create_nat_rule(self, object, location_object): ...   #   an API call
+#                                class PanOS12_1(PanOS11_1):      # only what differs from 11.1
+#                                    NAME_MAX = 127               # field rule
+#                                    def create_nat_rule(self, object, location_object): ...   # API call
 #      Same API and rules as 11.1:  class PanOS11_2(PanOS11_1): pass
-#   2. here: import it and add it to API_CLASSES, e.g. {'11.1': PanOS11_1, '12.1': PanOS12_1}
-# One class per SUPPORTED version of the PAN-OS API portal (docs.paloaltonetworks.com, skill panos-version-diff);
-# end-of-life versions have no class: they use DEFAULT (works or not, user decision 2026-11-25).
+#   2. here: import it and add it to API_CLASSES
+# one class per supported version of the API portal, EoL versions use DEFAULT
 import re
 import threading
 from .common import new_session, FirewallError, xml_response, xml_api_msg, API_TIMEOUT
 from .v11_1 import PanOS11_1
 
-# standard = PanOS11_1 (API + field rules read on PAN-OS 11.1); a version without its own class uses it
+# default class for versions without their own class
 API_CLASSES = {'11.1': PanOS11_1}
 DEFAULT = PanOS11_1
 
-APIS = {}            # host -> API object of the current job (one per firewall)
-_sessions = {}       # host -> session opened by keygen, handed to the API object by connect()
+APIS = {}
+_sessions = {}
 _lock = threading.Lock()
 
 
@@ -35,7 +32,6 @@ def select_class(sw_version):
     return API_CLASSES.get(f'{m.group(1)}.{m.group(2)}') or API_CLASSES.get(m.group(1)) or DEFAULT
 
 
-#API key (version independent: the version is not known yet); the session is kept for this firewall
 def keygen(host, user, password):
     session = new_session()
     response = session.post(f'https://{host}/api/', data={'type': 'keygen', 'user': user, 'password': password}, timeout=API_TIMEOUT)
@@ -51,7 +47,6 @@ def keygen(host, user, password):
     raise FirewallError(xml_api_msg(rs) or f'HTTP {response.status_code}')
 
 
-#read the PAN-OS version (read only) and create the API object of the firewall with the matching class
 def connect(host, token):
     with _lock:
         session = _sessions.pop(host, None) or new_session()
@@ -75,7 +70,7 @@ def connect(host, token):
     return api
 
 
-#API object of a firewall; not connected (version not read, e.g. old caller) -> DEFAULT class, no REST URL (no guess)
+#not connected: DEFAULT class, no REST URL
 def api(host, token):
     current = APIS.get(host)
     if current is not None and current.token == token:
@@ -83,7 +78,6 @@ def api(host, token):
     return DEFAULT(host, token, None, _sessions.get(host) or new_session())
 
 
-#text for the job page: version, REST path and class used for this firewall
 def describe(host):
     current = APIS.get(host)
     if current is None:

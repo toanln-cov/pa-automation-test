@@ -1,5 +1,5 @@
-# Writes static/import_template/template.xlsx from template_spec.py (FEAT-23: one template, 14 sheets in execution order).
-# Run after every change of template_spec.py:  python make_template.py   (from this folder; needs openpyxl)
+# Writes static/import_template/template.xlsx from template_spec.py
+# run after every change of template_spec.py
 import os
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment

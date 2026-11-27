@@ -1,11 +1,7 @@
-# Columns of the import template (FEAT-23): ONE workbook, 14 sheets in execution order (all add sheets, then all edit
-# sheets). Single source of truth for:
-#   - the template file (make_template.py writes static/import_template/template.xlsx from it)
-#   - the allowed / mandatory columns of an uploaded file (file_check.py)
-#   - the edit mode columns: on edit rule / group sheets every editable column X has its own 'Edit-X-mode' column
-#     (add / remove / replace / remain for a list, replace / remain for a single value); edit object sheets have none
+# Import template columns, single source for make_template.py and file_check.py
+# edit rule / group sheets: every editable column X has an 'Edit-X-mode' column
 REQ, COND, OPT = 'required', 'conditional', 'optional'     # header colour: red / yellow / green
-LIST, SINGLE = 'list', 'single'                             # edit kind of a column (None = not editable / key)
+LIST, SINGLE = 'list', 'single'                             # edit kind, None = not editable
 
 MODES = {LIST: ('add', 'remove', 'replace', 'remain'), SINGLE: ('replace', 'remain')}
 COLORS = {REQ: 'F8CBAD', COND: 'FFE699', OPT: 'C6E0B4'}
@@ -229,14 +225,14 @@ EDIT_SHEETS = [
         vsys(rule=True)]),
 ]
 
-# edit sheets with a mode column per editable column (rules, groups); object sheets: filled = replace, empty = keep
+# sheets with a mode column per editable column; object sheets: filled = replace, empty = keep
 MODE_SHEETS = ('edit_address_group', 'edit_service_group', 'edit_security_rule', 'edit_nat_rule')
 SHARED_SHEETS = ('add_tag', 'add_address_object', 'add_address_group', 'add_service_object', 'add_service_group',
                  'edit_tag', 'edit_address_object', 'edit_address_group', 'edit_service_object', 'edit_service_group')
 SHEET_ORDER = [name for name, _ in ADD_SHEETS + EDIT_SHEETS]
 
 
-#columns of a sheet as written in the template: mode sheets get 'Edit-X-mode' right after every editable column X
+#mode sheets: 'Edit-X-mode' right after each editable column X
 def sheet_columns(sheet):
     spec = dict(ADD_SHEETS + EDIT_SHEETS)[sheet]
     out = []
@@ -248,16 +244,15 @@ def sheet_columns(sheet):
     return out
 
 
-#edit cells where 'none' (any case) clears the value: the hint says so (file_check accepts 'None' there, FEAT-23)
+#edit cells where 'none' clears the value
 def clearable(sheet):
     return [c['name'] for c in dict(ADD_SHEETS + EDIT_SHEETS)[sheet] if sheet.startswith('edit_') and CLEAR in c['hint']]
 
 
-#editable columns of a sheet -> LIST / SINGLE
 def editable(sheet):
     return {c['name']: c['edit'] for c in dict(ADD_SHEETS + EDIT_SHEETS)[sheet] if c['edit']}
 
 
-#columns that must be in the header of the sheet (red in the template)
+#required columns, red in the template
 def mandatory(sheet):
     return [c['name'] for c in dict(ADD_SHEETS + EDIT_SHEETS)[sheet] if c['level'] == REQ]

@@ -15,32 +15,24 @@ import os
 import json
 from django.utils.csp import CSP
 from datetime import timedelta
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/3.2/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
-# runtime values are created by entrypoint.sh in data/ (per installation, from docker-compose environment)
+# runtime values written to data/ by entrypoint.sh
 DATA_DIR = BASE_DIR / 'data'
 try:
     RUNTIME = json.loads((DATA_DIR / 'runtime.json').read_text(encoding='utf-8'))
 except Exception:
     RUNTIME = {}
 
-# unique per installation (data/secret_key)
 SECRET_KEY = (DATA_DIR / 'secret_key').read_text(encoding='utf-8').strip()
 
-# SECURITY WARNING: don't run with debug turned on in production!
-# fail-safe: debug only if runtime.json has exactly true (APP_DEBUG=1); missing / malformed / any other value -> off
+# debug only if runtime.json says exactly true
 DEBUG = RUNTIME.get('DEBUG') is True
 
 ALLOWED_HOSTS = RUNTIME.get('ALLOWED_HOSTS', ['*'])
 
 
-# version shown on the About page
 APP_VERSION = '1.0'
 
 # Application definition
@@ -64,12 +56,12 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'django_app.security.TrustedTypesMiddleware',      # before CSP middleware = runs after it on the response
+    'django_app.security.TrustedTypesMiddleware',      # before CSP so it runs after it on the response
     'django.middleware.csp.ContentSecurityPolicyMiddleware',
     'django_app.security.SecurityHeadersMiddleware',
     'django_app.security.ForcePasswordChangeMiddleware',
     'django_app.security.SessionTimeoutMiddleware',
-    'axes.middleware.AxesMiddleware',     # login brute-force protection (must be last)
+    'axes.middleware.AxesMiddleware',     # axes must be last
 ]
 
 ROOT_URLCONF = 'django_app.urls'
@@ -78,7 +70,6 @@ TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'DIRS': [],
-        # 'DIRS': [os.path.join(BASE_DIR, 'myapp/templates')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -96,10 +87,8 @@ WSGI_APPLICATION = 'django_app.wsgi.application'
 
 
 # Database
-# https://docs.djangoproject.com/en/3.2/ref/settings/#databases
 
-# database only for web login (auth/session/admin), job state is json file in jobs/
-# db file in data/ (excluded from deploy.sh rsync, not served by Apache)
+# DB only for login / session / admin, jobs are json files
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -107,11 +96,10 @@ DATABASES = {
     }
 }
 
-# one-time messages ('Password changed.') kept in the session: no extra cookie
+# messages in the session, no extra cookie
 MESSAGE_STORAGE = 'django.contrib.messages.storage.session.SessionStorage'
 
-# password rules (change password, create user, admin reset, weak password check at login).
-# No similarity-to-username rule: a password may contain the username (user decision)
+# no username similarity rule on purpose
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
     {'NAME': 'django_app.security.CharacterClassesValidator'},
@@ -123,40 +111,38 @@ AUTH_PASSWORD_VALIDATORS = [
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/palo_alto/'
 LOGOUT_REDIRECT_URL = '/login/'
-SESSION_COOKIE_AGE = 30 * 60            # idle timeout: 30 minutes without using the tool -> login again
-SESSION_ABSOLUTE_AGE = 8 * 60 * 60      # max 8 hours after login, even when used all the time
-SESSION_COOKIE_SECURE = True            # site is HTTPS only
+SESSION_COOKIE_AGE = 30 * 60            # idle timeout 30 min
+SESSION_ABSOLUTE_AGE = 8 * 60 * 60      # max 8h after login
+SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_HTTPONLY = True
-# __Host- prefix: browser accepts the cookie only from this HTTPS site, path /, no Domain (no cookie injection from other hosts)
+# __Host- prefix: HTTPS only, path /, no Domain
 SESSION_COOKIE_NAME = '__Host-sessionid'
 CSRF_COOKIE_NAME = '__Host-csrftoken'
 CSRF_FAILURE_VIEW = 'django_app.security.csrf_failure'
 
 # CSRF / XSS hardening
-CSRF_COOKIE_HTTPONLY = True             # no page script reads the csrf cookie (token is in the forms)
+CSRF_COOKIE_HTTPONLY = True             # no script reads the csrf cookie
 SESSION_COOKIE_SAMESITE = 'Strict'
 CSRF_COOKIE_SAMESITE = 'Strict'
 X_FRAME_OPTIONS = 'DENY'
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = 'same-origin'
 SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin'
-# HSTS off by default: with the self-signed certificate + a host name, HSTS stops the browser from allowing "proceed anyway".
-# After installing a trusted certificate: APP_HSTS_SECONDS=31536000
+# HSTS off by default, it breaks 'proceed anyway' with the self-signed cert
+# set APP_HSTS_SECONDS=31536000 with a trusted cert
 SECURE_HSTS_SECONDS = int(RUNTIME.get('HSTS_SECONDS', 0))
 SECURE_HSTS_INCLUDE_SUBDOMAINS = False
 SECURE_HSTS_PRELOAD = False
-# W008: only port 443 is served (no HTTP listener to redirect from)
-# W004: HSTS off by default (self-signed certificate), see SECURE_HSTS_SECONDS
-# W005 / W021: when HSTS is turned on, includeSubDomains / preload not set on purpose: the tool is one internal host,
-#              it must not force HTTPS on the other hosts of the company domain
+# W008: only 443 served
+# W004: HSTS off by default
+# W005 / W021: no includeSubDomains / preload, single internal host
 SILENCED_SYSTEM_CHECKS = ['security.W008', 'security.W004', 'security.W005', 'security.W021']
 # browser features the tool never uses
 PERMISSIONS_POLICY = ('accelerometer=(), autoplay=(), camera=(), display-capture=(), encrypted-media=(), fullscreen=(self), '
                       'geolocation=(), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), '
                       'picture-in-picture=(), publickey-credentials-get=(), screen-wake-lock=(), usb=(), xr-spatial-tracking=()')
-# Content-Security-Policy: scripts and styles only from this site or inline <script>/<style> with nonce="{{ csp_nonce }}";
-# no inline event handlers, no style="" attributes, no external script/style/font/frame
+# CSP: scripts / styles only from self or with nonce, no inline handlers or style attributes
 SECURE_CSP = {
     'default-src': [CSP.SELF],
     'script-src': [CSP.SELF, CSP.NONCE],
@@ -169,7 +155,7 @@ SECURE_CSP = {
     'frame-ancestors': [CSP.NONE],
 }
 
-# errors: full details only in the server log (stderr -> Apache error log -> docker logs), never on pages
+# error details only in the server log
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -180,7 +166,7 @@ LOGGING = {
     },
 }
 
-# login brute-force protection (django-axes): lock username+IP after N failures, for M minutes
+# brute-force protection: lock username+IP after N failures
 AUTHENTICATION_BACKENDS = [
     'axes.backends.AxesStandaloneBackend',
     'django.contrib.auth.backends.ModelBackend',
@@ -189,12 +175,12 @@ AXES_FAILURE_LIMIT = int(RUNTIME.get('LOGIN_FAILURE_LIMIT', 5))
 AXES_COOLOFF_TIME = timedelta(minutes=int(RUNTIME.get('LOGIN_COOLOFF_MINUTES', 15)))
 AXES_LOCKOUT_PARAMETERS = [['username', 'ip_address']]
 AXES_RESET_ON_SUCCESS = True
-AXES_LOCKOUT_CALLABLE = 'django_app.security.lockout_response'    # lockout page with the wait in minutes (UI-13)
+AXES_LOCKOUT_CALLABLE = 'django_app.security.lockout_response'
 
-# TLS certificate check when the tool connects to the firewalls: path of a CA bundle (APP_PANOS_CA_BUNDLE), default off
+# CA bundle for firewall TLS check, off by default
 PANOS_TLS_VERIFY = RUNTIME.get('PANOS_CA_BUNDLE') or False
 
-# request size: uploaded file streamed to disk above 2.5 MB, form fields max 2.5 MB (Django defaults kept explicit)
+# request size limits, Django defaults kept explicit
 FILE_UPLOAD_MAX_MEMORY_SIZE = 2621440
 DATA_UPLOAD_MAX_MEMORY_SIZE = 2621440
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 200
@@ -203,7 +189,6 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 200
 
 
 # Internationalization
-# https://docs.djangoproject.com/en/3.2/topics/i18n/
 
 LANGUAGE_CODE = 'en-us'
 
@@ -215,8 +200,7 @@ USE_I18N = True
 USE_TZ = True
 
 
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/3.2/howto/static-files/
+# Static files
 
 STATIC_URL='/static/'
 STATIC_ROOT=os.path.join(BASE_DIR, 'static/') 
@@ -225,6 +209,5 @@ MEDIA_URL='/media/'
 MEDIA_ROOT=os.path.join(BASE_DIR, 'media/')
 
 # Default primary key field type
-# https://docs.djangoproject.com/en/3.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

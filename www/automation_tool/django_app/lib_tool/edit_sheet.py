@@ -1,11 +1,4 @@
-# Edit sheets (FEAT-23): the row is applied to the entry read on the firewall, the WHOLE entry is sent back with PUT
-# (attributes without a column are kept); dry-run does the same without sending. The config lock of the job is held, so
-# nobody changes the entry between the GET and the PUT.
-#   - rule / group sheets: every editable column has its mode column Edit-<Column>-mode: add / remove / replace / remain
-#     (single values: replace / remain); empty data + empty / remain mode = kept
-#   - object sheets (tag, address, service): no mode column, a filled cell replaces the value, empty = kept
-#   - 'none' (the whole cell, any case) clears a clearable value (fw.CLEARABLE)
-# Messages: '<Column>: <reason>' (row error, nothing written); warnings after the result of the row.
+# Edit sheets: entry read, edited and sent back whole with PUT under the config lock
 import copy
 from . import palo_alto_api_lib as palib
 from .PA_tool import (read_sheet, sheet_rows, row_label, shown, row_errors, cached_list, row_location, check_position,
@@ -13,9 +6,9 @@ from .PA_tool import (read_sheet, sheet_rows, row_label, shown, row_errors, cach
                       is_shared, job_created, group_cycle, GROUP_MEMBERS, vsys_label, nat_wildcard_sources, note_wildcard, nat_static_fqdn, bare_ip_warnings)
 from .panos import fields
 
-MODE_KINDS = ('address_group', 'service_group', 'security_rule', 'nat_rule')     # sheets with mode columns
+MODE_KINDS = ('address_group', 'service_group', 'security_rule', 'nat_rule')
 MODES = ('add', 'remove', 'replace', 'remain')
-CREATE_KIND = {'security_rule': 'create_policy', 'nat_rule': 'create_nat'}         # DryRunContext kind of the add sheet
+CREATE_KIND = {'security_rule': 'create_policy', 'nat_rule': 'create_nat'}
 NAT_TYPE_COLUMNS = {'Destination-translation-type': 'nat_dst_translation', 'Source-translation-type': 'nat_src_translation'}
 
 
@@ -27,7 +20,6 @@ def is_clear(fw, value):
     return not fields.empty(value) and str(value).strip().lower() == fw.CLEAR_WORD
 
 
-#value at a path of the entry; list path (ends with 'member') -> list
 def get_path(entry, path):
     node = entry
     for key in path:
@@ -39,7 +31,6 @@ def get_path(entry, path):
     return node
 
 
-#set a value at a path (None = remove the value, and its container when it becomes empty)
 def set_path(entry, path, value):
     if value is None or value == []:
         parents = [entry]
@@ -48,7 +39,7 @@ def set_path(entry, path, value):
             if parents[-1] is None:
                 return
         parents[-1].pop(path[-1], None)
-        for depth in range(len(path) - 1, 0, -1):      # empty containers removed ('tag': {} is not valid)
+        for depth in range(len(path) - 1, 0, -1):      # empty containers are not valid
             if parents[depth] == {}:
                 parents[depth - 1].pop(path[depth - 1], None)
         return
@@ -58,8 +49,6 @@ def set_path(entry, path, value):
     node[path[-1]] = value
 
 
-#columns that the row edits: rule / group sheets -> mode of each filled column; object sheets -> 'replace'
-#(mode errors added to check). Editable columns = fw.EDIT_FIELDS + the special columns of the kind
 def row_modes(fw, kind, row, editable, check):
     modes = {}
     for col, is_list in editable.items():
@@ -90,8 +79,7 @@ def row_modes(fw, kind, row, editable, check):
     return modes
 
 
-#add / remove / replace of a list cell (FEAT-23 Source-ip table) -> (new list, error, warning)
-#any_list: empty = any on the firewall (rule cells); service: application-default behaves like any
+#service: application-default behaves like any
 def list_change(col, mode, current, values, any_list, service, thing):
     anys = ('any', 'application-default') if service else ('any',)
     cur_any = any_list and (not current or (len(current) == 1 and current[0] in anys))
@@ -124,7 +112,7 @@ def list_change(col, mode, current, values, any_list, service, thing):
         if not result and col == 'Member':
             return None, 'Member: group would be empty', ''
         return result, '', ''
-    old = ['any'] if cur_any and not current else current          # replace
+    old = ['any'] if cur_any and not current else current
     if set(values) == set(old):
         return current, '', ''
     warning = ''
@@ -135,7 +123,6 @@ def list_change(col, mode, current, values, any_list, service, thing):
     return values, '', warning
 
 
-#new NAT translation of a replaced type (every column of the new type required, columns of the old type dropped)
 def nat_translation_change(fw, row, col, entry, check):
     keys = ('destination-translation', 'dynamic-destination-translation') if col.startswith('Destination') else ('source-translation',)
     built = getattr(fw, NAT_TYPE_COLUMNS[col])(row, check)
@@ -146,7 +133,6 @@ def nat_translation_change(fw, row, col, entry, check):
     return old != built, built
 
 
-#entry of the reference check (dry-run): the shape of the kind, only the NEW names of the row
 def reference_entry(fw, kind, name, refs):
     if kind in ('security_rule', 'nat_rule'):
         entry = {'@name': name, 'from': {'member': []}, 'to': {'member': []}, 'source': {'member': []},
@@ -162,12 +148,11 @@ def reference_entry(fw, kind, name, refs):
         if path:
             set_path(entry, path, list(values) if path[-1] == 'member' else values[0])
         elif col in NAT_TYPE_COLUMNS:
-            entry.update(values)                # translation dict built by the version class
+            entry.update(values)
     return entry
 
 
-#rulebase used for the moves: the rules read on the firewall; at Dry-run the order left by the add sheets of the job instead
-#(the rules they create are not on the firewall yet - BUG-86), kept across the rows of the sheet
+#Dry-run: rules from add sheets are not on the firewall yet
 def rule_order(cache, ckey, job, host, loc, kind, dry_run):
     planned = job.get('order', {}).get((host, loc['@vsys'], kind))
     if not dry_run or planned is None:
@@ -177,7 +162,6 @@ def rule_order(cache, ckey, job, host, loc, kind, dry_run):
     return cache[('dry_order', ckey)]
 
 
-#current position of a rule vs the asked one: already there -> True
 def already_at(rules, name, where, ref):
     names = [r['@name'] for r in rules]
     if name not in names:
@@ -204,7 +188,7 @@ def automatic_edit(kind,username,password,input_excel_file_path,sheet,location_o
         rows = [r for r in rows if str(r.get('Device-ip')) == device]
 
     final_result = ''
-    cache = {}                          # (device, vsys) -> entries read on the firewall (GET once per sheet), updated after each edit
+    cache = {}
     for row in rows:
         host = row['Device-ip']
         token = dict_device_token[host]
@@ -216,7 +200,6 @@ def automatic_edit(kind,username,password,input_excel_file_path,sheet,location_o
         warnings = []
         result = row_label(row) + 'Device-IP: ' + str(row['Device-ip']) + ' (' + vsys_label(fw, row, loc) + f') | {text}: ' + shown(row.get('Name')) + ' => '
 
-        #name (key of the row: Device-ip + Name + Vsys, no rename)
         holder = {'entry': {}}
         if kind == 'tag':
             reason = '' if fields.empty(row.get('Name')) else fw.tag_name_error(row['Name'])
@@ -229,7 +212,6 @@ def automatic_edit(kind,username,password,input_excel_file_path,sheet,location_o
             fw.take_name(row, holder, check)
         name = holder['entry'].get('@name', '')
 
-        #modes, 'none' (clear), then the format rules of the filled values (same rules as the add sheets)
         editable = edit_columns(fw, kind)
         modes = row_modes(fw, kind, row, editable, check)
         clears = {c for c, m in modes.items() if m == 'replace' and c in fw.CLEARABLE and is_clear(fw, row.get(c))}
@@ -244,14 +226,13 @@ def automatic_edit(kind,username,password,input_excel_file_path,sheet,location_o
         if together and (together[0] in modes) != (together[1] in modes):
             check['status'] = False
             check['msg'] += f' {together[0]} and {together[1]} must be filled together +++'
-        if kind == 'nat_rule':                  # columns of a translation type: only with that type replaced
+        if kind == 'nat_rule':
             for type_col, used in (('Destination-translation-type', fw.NAT_DST_COLUMNS), ('Source-translation-type', fw.NAT_SRC_COLUMNS)):
                 for c in sorted({c for cols in used.values() for c in cols}):
                     if not fields.empty(row.get(c)) and type_col not in modes:
                         check['status'] = False
                         check['msg'] += f' {c}: only with {type_col} replace +++'
 
-        #the entry on the firewall (dry-run: also the entries created by the add sheets of the file)
         current, not_read = None, ''
         if check['status']:
             known, not_read = cached_list(cache, ckey, getattr(palib, getter), host, token, loc)
@@ -278,7 +259,6 @@ def automatic_edit(kind,username,password,input_excel_file_path,sheet,location_o
             made_groups = dry_ctx.entries.get((host, loc['@vsys'], 'address_group'), []) if dry_run else []
             changed, refs = apply_row(fw, kind, row, modes, clears, new, check, warnings, host, token, loc, cache, made_groups)
 
-        #Position / Reference-rule of the rule sheets: move (alone or with changes), reference already on the firewall
         where, ref, move_wanted = '', '', False
         if check['status'] and kind in ('security_rule', 'nat_rule') and not fields.empty(row.get('Position')):
             rules = rule_order(cache, ckey, job, host, loc, kind, dry_run)
@@ -290,7 +270,7 @@ def automatic_edit(kind,username,password,input_excel_file_path,sheet,location_o
                 else:
                     move_wanted = True
 
-        #NAT Source-ip with an ip-wildcard address: refused by the firewall -> refused here at Dry-run and Install (P8)
+        #firewall refuses ip-wildcard as NAT Source-ip
         if check['status'] and kind == 'nat_rule' and 'Source-ip' in modes:
             wild = nat_wildcard_sources(fw, cache, host, token, loc, get_path(new, ('source', 'member')), job)
             if wild:
@@ -302,7 +282,6 @@ def automatic_edit(kind,username,password,input_excel_file_path,sheet,location_o
                 check['status'] = False
                 check['msg'] += f" Dst-translate-address: '{fqdn}' is an fqdn address: not valid with destination static (use an IP address) +++"
 
-        #dry-run: the new names of the row must exist (firewall or created by the file)
         if dry_run and check['status'] and refs:
             ref_rs = dry_ctx.check(ctx_kind, host, token, loc, {'entry': reference_entry(fw, kind, name, refs)})
             if ref_rs:
@@ -335,7 +314,7 @@ def automatic_edit(kind,username,password,input_excel_file_path,sheet,location_o
             if rs is None or fw.is_success(rs):
                 if kind == 'security_rule' and changed and allows_all(new):
                     warnings.append(ALLOWS_ALL)
-                if kind in ('security_rule', 'nat_rule') and changed:       # only the values written by this row (P18)
+                if kind in ('security_rule', 'nat_rule') and changed:
                     added = {key: {'member': [v for v in refs.get(col, []) if isinstance(v, str)]}
                              for key, col in (('source', 'Source-ip'), ('destination', 'Destination-ip'))}
                     warnings += bare_ip_warnings(fw, cache, host, token, loc, added, job)
@@ -353,8 +332,6 @@ def automatic_edit(kind,username,password,input_excel_file_path,sheet,location_o
     return final_result
 
 
-#editable columns of a kind -> is a list cell (add / remove / replace). Single value with a list path: one name
-#(NAT Destination-zone, Profile-group); object sheets: Tag replaced in full (no mode)
 def edit_columns(fw, kind):
     single_lists = {'nat_rule': ('Destination-zone',), 'security_rule': ('Profile-group',)}.get(kind, ())
     cols = {c: (p[-1] == 'member' and kind in MODE_KINDS and c not in single_lists) for c, p in fw.EDIT_FIELDS[kind].items()}
@@ -365,7 +342,6 @@ def edit_columns(fw, kind):
     return cols
 
 
-#apply the edited columns to the entry (new, a copy of the current one) -> (changed, names to check at dry-run)
 def apply_row(fw, kind, row, modes, clears, new, check, warnings, host, token, loc, cache, made_groups):
     changed, refs = False, {}
     rule = kind in ('security_rule', 'nat_rule')
@@ -413,8 +389,7 @@ def apply_row(fw, kind, row, modes, clears, new, check, warnings, host, token, l
     return changed, refs
 
 
-#address Type + Value (always together); ip-wildcard in a static group refused at Dry-run AND Install (FW01 11.1.10 accepts
-#the PUT, the commit fails - BUG-82): groups read on the firewall + groups created by the add sheets of the file (Dry-run)
+#firewall accepts ip-wildcard in a static group PUT but the commit fails
 def edit_address_value(fw, row, new, check, host, token, loc, cache, made_groups):
     kind, value = str(row['Type']), str(row['Value'])
     old = {t: new[t] for t in fw.ADDRESS_TYPES if t in new}
@@ -433,8 +408,7 @@ def edit_address_value(fw, row, new, check, host, token, loc, cache, made_groups
     return True
 
 
-#service protocol part: Protocol + Destination-port together; Source-port, Override, timeouts replace / none clears.
-#Effective values = row value, else current value; timeouts only with Override yes, Halfclose / Timewait only for tcp
+#timeouts only with Override yes, Halfclose / Timewait only for tcp
 def edit_service_protocol(fw, row, modes, clears, new, check):
     protocol = new.get('protocol') or {}
     cur_proto = next(iter(protocol), 'tcp')
@@ -452,7 +426,7 @@ def edit_service_protocol(fw, row, modes, clears, new, check):
     times = {k: value(c, cur_times.get(k)) for c, k in (('Timeout', 'timeout'), ('Halfclose-timeout', 'halfclose-timeout'),
                                                          ('Timewait-timeout', 'timewait-timeout'))}
     for c, k in (('Timeout', 'timeout'), ('Halfclose-timeout', 'halfclose-timeout'), ('Timewait-timeout', 'timewait-timeout')):
-        if c in modes and c not in clears and k != 'timeout' and proto != 'tcp':      # udp first (P12)
+        if c in modes and c not in clears and k != 'timeout' and proto != 'tcp':
             check['status'] = False
             check['msg'] += f' {c} Input Error (only for tcp) +++'
         elif c in modes and c not in clears and override != 'yes':
@@ -475,7 +449,6 @@ def edit_service_protocol(fw, row, modes, clears, new, check):
     return True
 
 
-#dry-run: the next rows / sheets see the edited entry (address type change: static group member or not)
 def remember_dry_edit(fw, dry_ctx, kind, host, loc, current, new, known):
     known[:] = [new if e.get('@name') == new['@name'] else e for e in known]
     created = dry_ctx.entries.get((host, loc['@vsys'], CREATE_KIND.get(kind, kind)), [])

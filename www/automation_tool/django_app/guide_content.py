@@ -1,11 +1,9 @@
-# User guide content per sheet (EN / VI): synopsis, notes, examples (use cases), plus the limits of the tool.
-# The column tables are built from template_spec.py (names, required level, choices), so the Guide always matches the
-# template; only the texts below are written by hand. Messages are quoted exactly as the tool prints them.
+# Guide text per sheet (EN / VI), column tables come from template_spec.py
 from . import template_spec as spec
 
 REQUIRED = {spec.REQ: {'en': 'yes', 'vi': 'có'}, spec.COND: {'en': 'depends', 'vi': 'tùy trường hợp'}, spec.OPT: {'en': 'no', 'vi': 'không'}}
 
-# column descriptions in Vietnamese (EN uses the hint of the template); ('edit', column) = text of the edit sheets
+# Vietnamese column descriptions, EN uses the template hint
 VI_COLUMNS = {
     'Device-ip': 'IP của firewall (IPv4).',
     'Name': 'Tên mới, tối đa 63 ký tự (chữ, số, dấu cách, . _ -), bắt đầu bằng chữ hoặc số, không được là any (mọi kiểu chữ).',
@@ -109,7 +107,7 @@ def column_rows(sheet, lang):
                                   'vi': f'Cách áp dụng {target}. Trống / remain = giữ nguyên.'}[lang]})
             continue
         if lang == 'en':
-            text = c['hint'].removeprefix('EXAMPLE ROW - replace or delete before upload. ')     # template-only words (P16)
+            text = c['hint'].removeprefix('EXAMPLE ROW - replace or delete before upload. ')
         else:
             edit = sheet.startswith('edit_')
             text = VI_COLUMNS.get((sheet, name)) or VI_COLUMNS.get(('edit', name) if edit else name) or VI_COLUMNS.get(name, '')
@@ -123,9 +121,9 @@ def t(en, vi):
     return {'en': en, 'vi': vi}
 
 
-# results shown by every add / edit sheet
+# results common to all sheets
 
-S = {}       # sheet -> synopsis, notes, examples (use case, cells, result), extra results
+S = {}
 
 S['add_tag'] = {
     'synopsis': t('Create tags. Runs first, so objects and rules of the same file can use the new tags.',

@@ -11,16 +11,14 @@ import logging
 
 logger = logging.getLogger('django_app.commit')
 
-# Bulk commit: separate feature (not related to the Excel template / configuration jobs)
-#   action 'validate' = commit check (validate only, nothing applied)
-#   action 'commit'   = commit
+# bulk commit / commit check on many firewalls
 MAX_TARGETS = 256
 PARALLEL = 5
 POLL_INTERVAL = 5            # seconds between job status checks
-JOB_TIMEOUT = 30 * 60        # max seconds to wait for a commit / validate job on a firewall
+JOB_TIMEOUT = 30 * 60        # max wait per firewall job, seconds
 
 
-#"10.0.0.1, 10.0.0.5-10.0.0.8, 10.0.1.0/30" -> (list of ip, list of error), keep order, no duplicate
+#parse targets into ips + errors, keep order, no duplicate
 def parse_targets(text):
     ips, errors = [], []
     for token in [t for t in re.split(r'[\s,;]+', text or '') if t]:
@@ -64,20 +62,20 @@ def wait_job(host,token,job_id):
     start = time.time()
     while True:
         st = palib.get_job_status(host, token, job_id)
-        if palib.job_finished(host, token, st):          # job states of the PAN-OS version (version class)
+        if palib.job_finished(host, token, st):
             return st
         if time.time() - start > JOB_TIMEOUT:
             raise palib.FirewallError(f'job {job_id} not finished after {JOB_TIMEOUT // 60} minutes (status {st["status"]}, progress {st["progress"]}%)')
         time.sleep(POLL_INTERVAL)
 
 
-#commit check / commit on 1 firewall, return result line (same format as configuration jobs for job page)
+#commit check / commit on 1 firewall, return result line
 def run_one(ip,username,password,action,admin,description):
     label = 'Commit check' if action == 'validate' else 'Commit'
     start = time.time()
     try:
         token = palib.get_token(ip, username, password)
-        palib.detect_rest_version(ip, token)          # API class of this firewall's PAN-OS version (read only)
+        palib.detect_rest_version(ip, token)
         if palib.check_pending_changes(ip, token) != 'yes':
             return f'Device-IP: {ip} => SKIPPED: no pending changes'
         if action == 'validate':
@@ -85,15 +83,15 @@ def run_one(ip,username,password,action,admin,description):
         else:
             job_id, msg = palib.start_commit(ip, token, description, admin)
         if not job_id:
-            return f'Device-IP: {ip} => SKIPPED: {msg}'      # e.g. no changes of this admin to commit
+            return f'Device-IP: {ip} => SKIPPED: {msg}'
         st = wait_job(ip, token, job_id)
         took = f'{label} job {job_id} ({int(time.time() - start)}s)'
         if palib.job_ok(ip, token, st):
             line = f'Device-IP: {ip} => command succeeded | {took}'
             if st.get('warnings'):
-                line += ' | Warning:\n' + st['warnings']      # <warnings> of the job as the firewall shows them, 1 line each (BUG-77) -> warning on job page
+                line += ' | Warning:\n' + st['warnings']      # job warnings, 1 per line
             elif 'warning' in st['details'].lower():
-                line += ' | ' + st['details']      # details contain 'warning' -> shown as warning on job page
+                line += ' | ' + st['details']
             return line
         return f'Device-IP: {ip} => {label} FAILED | {took} | {st["details"]}'
     except Exception as e:
@@ -101,7 +99,7 @@ def run_one(ip,username,password,action,admin,description):
         return f'Device-IP: {ip} => {label} FAILED | {palib.safe_error(e)}'
 
 
-#unexpected error while preparing the job -> generic message on the form, details only in the server log
+#unexpected error: generic message on the form, details in server log
 @login_required
 def bulk_commit(request):
     try:
@@ -120,7 +118,7 @@ def _bulk_commit(request):
     username = request.POST.get('username', '')
     password = request.POST.get('password', '')
     action = request.POST.get('action', '')
-    scope = request.POST.get('scope', '')            # no default: the user must choose (BUG-57)
+    scope = request.POST.get('scope', '')            # no default, user must choose
     description = request.POST.get('description', '').strip()
 
     errors = []
@@ -143,7 +141,7 @@ def _bulk_commit(request):
     admin = username if scope == 'admin' else None
     label = 'Commit check' if action == 'validate' else 'Commit'
 
-    #all firewalls in 1 section, max PARALLEL at the same time, result shown as soon as a firewall finished
+    #max PARALLEL firewalls at a time, results shown as each one finishes
     def step(log):
         with ThreadPoolExecutor(max_workers=PARALLEL) as pool:
             futures = [pool.submit(run_one, ip, username, password, action, admin, description) for ip in ips]

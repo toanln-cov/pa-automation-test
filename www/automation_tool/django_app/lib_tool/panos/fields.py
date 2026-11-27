@@ -1,17 +1,14 @@
-# Field checks shared by every PAN-OS version class: the building blocks (length, choices, number range, ports, IP)
-# and the engine that checks one Excel row. The LIMITS (max lengths, allowed values, patterns) are attributes of the
-# version classes (v11_1.py: PanOS11_1), so a version with other limits only overrides those attributes.
-# Each check returns '' (valid) or the reason shown after '<Column> Input Error'.
+# Field checks shared by every PAN-OS version class.
+# limits are version class attributes, see v11_1.py
+# each check returns '' or the error reason
 import ipaddress
 import math
 import re
 
 
-#every member of list a is in list b
 def is_subset(a, b):
     return all(elem in b for elem in a)
 
-#mandatory cell: empty (NaN) -> ValueError, caught by the sheet code as '<Column> Input Error'
 def check_nan_value(value):
     if isinstance(value, float) and math.isnan(value):
         raise ValueError('Empty Value')
@@ -19,7 +16,6 @@ def check_nan_value(value):
 def empty(value):
     return value is None or (isinstance(value, float) and math.isnan(value))
 
-#characters not allowed, shown readable (newline / control characters as \n, \x07...), at most 5
 def bad_chars(text, allowed):
     bad = []
     for c in text:
@@ -33,7 +29,7 @@ def text_max(limit):
         return f'max {limit} characters, has {len(value)}' if len(value) > limit else ''
     return check
 
-#length in bytes (UTF-8): the firewall counts bytes for descriptions, a letter with accents takes 2-3 bytes (BUG-61)
+#firewall counts description length in UTF-8 bytes
 def bytes_max(limit):
     def check(value):
         size = len(value.encode('utf-8'))
@@ -64,7 +60,6 @@ def list_of(item_max, max_items=None, what='name'):
         return f'{what} max {item_max} characters: {long[0][:20]}...' if long else ''
     return check
 
-#port list: single port, range a-b (a <= b), comma separated
 def ports(port_max):
     def check(value):
         for part in items(value):
@@ -91,7 +86,6 @@ def interface_ip(value):
     except ValueError:
         return 'IP address (with or without /mask) or no'
 
-#value of an address object by its type
 def address_value(kind, fqdn, fqdn_max):
     def check(value):
         try:
@@ -116,9 +110,7 @@ def address_value(kind, fqdn, fqdn_max):
     return check
 
 
-#list cell -> (names, reason): spaces around the commas removed; an empty value (extra comma) or a repeated name is an
-#error, the admin must send an exact list (FEAT-23); names compared exactly (case sensitive, like the firewall);
-#any_words: written in lower case whatever the case typed ('Any' -> 'any')
+#exact list required, names case sensitive like the firewall
 def list_cell(value, any_words=()):
     parts = [p.strip() for p in str(value).split(',')]
     parts = [p.lower() if p.lower() in any_words else p for p in parts]
@@ -130,10 +122,7 @@ def list_cell(value, any_words=()):
     return parts, ''
 
 
-#check one row: columns = {column: (check, lower case, optional)}; list_columns checked first (no empty / repeated
-#values: error, FEAT-23), any_words {column: words} written in lower case; choices written in lower case. Invalid optional values are
-#emptied so the sheet code does not report them a second time; empty mandatory values are reported by the sheet code.
-#conditional(row) = columns that depend on another column, read after the lower case step. Return [(column, reason)].
+#check one row, return [(column, reason)]
 def check_columns(row, columns, list_columns, any_words, conditional):
     errors = []
     for col in list_columns:

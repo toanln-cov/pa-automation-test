@@ -135,7 +135,7 @@
     input.addEventListener('change', () => { label.textContent = input.files.length ? input.files[0].name : ''; });
     ['dragenter', 'dragover'].forEach(e => dz.addEventListener(e, () => dz.classList.add('drag')));
     ['dragleave', 'drop'].forEach(e => dz.addEventListener(e, () => dz.classList.remove('drag')));
-    // Install: push to the firewall (option Stop duplicated); Dry-run: read only check, no option
+    // Install pushes to the firewall, Dry-run is read only
     const mode = document.getElementById('config_type_value');
     const installOnly = ['stop-duplicate-box', 'allow-disable-box'].map(id => document.getElementById(id));
     const syncMode = () => {

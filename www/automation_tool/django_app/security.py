@@ -16,17 +16,15 @@ from django.dispatch import receiver
 from django.shortcuts import redirect, render
 from django.utils.cache import add_never_cache_headers
 
-# security helpers: target IP check (SSRF), upload limits (DoS / zip bomb), forced password change,
-# security headers, audit log, error views rendered with the request (CSP nonce)
+# security helpers: SSRF check, upload limits, forced password change, headers, audit log
 logger = logging.getLogger('django_app.security')
 
-MAX_UPLOAD_BYTES = 10 * 1024 * 1024          # uploaded .xlsx
-MAX_UNZIPPED_BYTES = 100 * 1024 * 1024       # total size of the files inside the .xlsx (zip bomb)
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+MAX_UNZIPPED_BYTES = 100 * 1024 * 1024       # zip bomb
 MAX_ZIP_ENTRIES = 1000
 
 
-#firewall IP given by a user (Device-ip, commit targets): IPv4 only (IPv6 not supported), unicast address of a real device,
-#not this container / host (loopback), not cloud metadata / link-local (169.254.x.x), not multicast / reserved
+#SSRF: firewall IP must be a real unicast IPv4 device
 def target_ip_error(value):
     try:
         ip = ipaddress.ip_address(str(value).strip())
@@ -40,7 +38,7 @@ def target_ip_error(value):
     return None
 
 
-#uploaded .xlsx: size and content of the zip container checked BEFORE it is parsed, return error message or None
+#check .xlsx size and zip content before parsing
 def xlsx_error(file):
     if file.size > MAX_UPLOAD_BYTES:
         return f'File too large (max {MAX_UPLOAD_BYTES // (1024 * 1024)} MB).'
@@ -56,7 +54,6 @@ def xlsx_error(file):
     return None
 
 
-#password must contain an uppercase letter, a lowercase letter, a digit and a special character (any other character)
 class CharacterClassesValidator:
     CLASSES = (('an uppercase letter', str.isupper), ('a lowercase letter', str.islower), ('a digit', str.isdigit),
                ('a special character', lambda c: not c.isalnum()))
@@ -78,13 +75,11 @@ def weak_password(password, user):
         return True
 
 
-#username allowed in the tool (same characters as Django admin / page Users): letters, digits, @ . + - _ ; max 150
 def valid_username(username):
     return len(username) <= 150 and re.fullmatch(r'[\w.@+-]+', username) is not None
 
 
-#login with a username the tool cannot have (line break, control or other special characters): refused as a wrong login,
-#no authentication, the typed text is not written to the log (no fake log lines, SEC-42)
+#impossible username: refused as wrong login, not logged
 class LoginForm(AuthenticationForm):
     def clean(self):
         username = self.cleaned_data.get('username') or ''
@@ -94,7 +89,7 @@ class LoginForm(AuthenticationForm):
         return super().clean()
 
 
-#lockout page (django-axes): wait shown in minutes ('Try again in 15 minutes.'), not the ISO text 'PT15M' (UI-13); status 429 + Retry-After kept
+#lockout page: wait in minutes instead of 'PT15M'
 def lockout_response(request, original_response=None, credentials=None):
     minutes = int(settings.AXES_COOLOFF_TIME.total_seconds() // 60)
     response = render(request, 'pages/lockout.html', {'failure_limit': settings.AXES_FAILURE_LIMIT,
@@ -103,13 +98,13 @@ def lockout_response(request, original_response=None, credentials=None):
     return response
 
 
-#login: a password that does not pass the password rules (e.g. default admin/admin) -> must change it before using the tool
+#weak password at login: must change it first
 class LoginView(auth_views.LoginView):
     authentication_form = LoginForm
 
     def form_valid(self, form):
-        response = super().form_valid(form)          # new session (no session fixation)
-        self.request.session['auth_time'] = int(time.time())     # start of the absolute session timeout
+        response = super().form_valid(form)          # new session, no fixation
+        self.request.session['auth_time'] = int(time.time())     # absolute session timeout start
         if weak_password(form.cleaned_data.get('password', ''), form.get_user()):
             self.request.session['must_change_password'] = True
         return response
@@ -124,8 +119,8 @@ class PasswordChangeView(auth_views.PasswordChangeView):
         return response
 
 
-#session: idle timeout = SESSION_COOKIE_AGE, renewed by user actions only (job status polling does not keep the session alive);
-#absolute timeout = SESSION_ABSOLUTE_AGE after login
+#idle timeout renewed by user actions only, not by job polling
+#absolute timeout: SESSION_ABSOLUTE_AGE after login
 class SessionTimeoutMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
@@ -135,16 +130,15 @@ class SessionTimeoutMiddleware:
             now = int(time.time())
             started = request.session.setdefault('auth_time', now)
             if now - started > settings.SESSION_ABSOLUTE_AGE:
-                request.session_expired = True          # audit line says 'session expired', not 'logout'
+                request.session_expired = True          # audit says 'session expired', not 'logout'
                 logout(request)
                 return redirect(f'/login/?next={quote(request.path)}')
             if not request.path.endswith('/status'):
-                request.session.modified = True          # saved -> cookie and DB expiry renewed
+                request.session.modified = True          # saving renews cookie and DB expiry
         return self.get_response(request)
 
 
-#Trusted Types: DOM XSS sinks (innerHTML, eval...) blocked by the browser on the tool pages;
-#not on /admin/ (Django admin scripts use innerHTML)
+#Trusted Types on tool pages, not /admin/ since Django admin uses innerHTML
 class TrustedTypesMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
@@ -157,9 +151,9 @@ class TrustedTypesMiddleware:
         return response
 
 
-#every page except the password change / logout -> redirect to /password/ while the flag is set
+#redirect to /password/ while the flag is set
 class ForcePasswordChangeMiddleware:
-    ALLOWED_PATHS = ('/password/', '/logout/')                        # exact path
+    ALLOWED_PATHS = ('/password/', '/logout/')
     ALLOWED_PREFIXES = ('/static/', '/palo_alto/guide', '/about/')
 
     def __init__(self, get_response):
@@ -172,7 +166,7 @@ class ForcePasswordChangeMiddleware:
         return self.get_response(request)
 
 
-#headers not covered by Django settings; pages are never cached (job results, user list are sensitive)
+#extra headers; pages never cached, results are sensitive
 class SecurityHeadersMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
@@ -187,7 +181,7 @@ class SecurityHeadersMiddleware:
         return response
 
 
-#500 / CSRF failure pages rendered with the request: CSP nonce available (styled page), no internal detail
+#error pages rendered with the request so the CSP nonce works
 def server_error(request):
     return render(request, '500.html', status=500)
 
@@ -197,7 +191,7 @@ def csrf_failure(request, reason=''):
     return render(request, '403_csrf.html', status=403)
 
 
-#audit log (stderr -> docker logs): who logged in / out, failed logins (no password)
+#audit log to stderr: logins, logouts, failures
 def client_ip(request):
     return request.META.get('REMOTE_ADDR', '-') if request else '-'
 
@@ -209,7 +203,7 @@ def _logged_in(sender, request, user, **kwargs):
 
 @receiver(user_logged_out)
 def _logged_out(sender, request, user, **kwargs):
-    if user is None:                                    # logout without session (already signed out / expired): nothing to audit
+    if user is None:                                    # no session: nothing to audit
         return
     if getattr(request, 'session_expired', False):
         logger.info('session expired (%g h maximum): %s from %s', settings.SESSION_ABSOLUTE_AGE / 3600, user.username, client_ip(request))

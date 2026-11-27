@@ -14,7 +14,7 @@
             --border: #e2e8f0;
             --text: #1e293b;
             --muted: #64748b;
-            --primary: #fa582d;          /* accent orange */
+            --primary: #fa582d;
             --primary-hover: #e04a21;
             --primary-soft: #fff1ec;
             --ok: #15803d;      --ok-soft: #dcfce7;
@@ -70,7 +70,7 @@
         .nav a.active { color: var(--primary); background: var(--primary-soft); }
         .user { display: flex; align-items: center; gap: 10px; margin: 0; padding-left: 16px; border-left: 1px solid var(--border); }
         .nav a { white-space: nowrap; }
-        /* narrow screen: menu on its own row (wraps), no horizontal page scroll */
+        /* narrow screen: menu wraps, no horizontal scroll */
         @media (max-width: 860px) {
             .topbar-inner { height: auto; flex-wrap: wrap; padding: 8px 16px; gap: 8px 16px; }
             .nav { order: 3; width: 100%; margin-left: 0; flex-wrap: wrap; }
@@ -141,7 +141,7 @@
         .muted { color: var(--muted); }
         .mono { font-family: var(--mono); }
         .footer { text-align: center; color: var(--muted); font-size: 12px; padding: 0 16px 24px; }
-        /* utility classes (CSP: no style="" attributes) */
+        /* utility classes, no style="" under CSP */
         .u-m0 { margin: 0; } .u-mb16 { margin: 0 0 16px; } .u-mt12 { margin-top: 12px; } .u-mt20 { margin-top: 20px; }
         .u-pull6 { margin: -6px 0 16px; } .u-pull8 { margin-top: -8px; margin-bottom: 16px; }
         .u-p10 { padding: 10px; } .u-p24 { padding: 24px; }

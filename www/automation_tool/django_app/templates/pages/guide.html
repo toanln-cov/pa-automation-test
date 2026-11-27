@@ -47,7 +47,7 @@
 
 {% block script %}
 <script nonce="{{ csp_nonce }}">
-    // a link to a section (table of contents, #sheet-add_tag...) opens it and the sections around it
+    // section link opens it and its neighbours
     const openTarget = () => {
         const el = location.hash ? document.getElementById(location.hash.slice(1)) : null;
         for (let node = el; node; node = node.parentElement) { if (node.tagName === 'DETAILS') node.open = true; }

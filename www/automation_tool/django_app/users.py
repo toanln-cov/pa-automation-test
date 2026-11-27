@@ -16,12 +16,12 @@ import logging
 
 logger = logging.getLogger('django_app.security')
 
-# Users page (Admin only): 2 roles only
-#   User  = is_active                               -> portal (Configure, Commit, Job history, Guide)
-#   Admin = is_active + is_staff + is_superuser     -> portal + manage users
+# Users page, admin only: 2 roles
+#   User  = is_active
+#   Admin = is_active + is_staff + is_superuser
 ROLES = ('user', 'admin')
 
-#logged-in non-admin -> 403 (not a redirect to login: login would redirect back here = loop)
+#non-admin gets 403, a login redirect would loop
 def admin_required(view):
     @wraps(view)
     def wrapper(request, *args, **kwargs):
@@ -39,12 +39,12 @@ def role_of(user):
     return 'admin' if user.is_superuser else 'user'
 
 
-#active admins other than `user` (at least 1 active admin must always remain)
+#other active admins, at least 1 must remain
 def other_active_admins(user):
     return User.objects.filter(is_active=True, is_superuser=True).exclude(pk=user.pk).count()
 
 
-#username -> failed attempts still in the lockout window (django-axes)
+#failed attempts per username in the lockout window
 def locked_usernames():
     since = timezone.now() - settings.AXES_COOLOFF_TIME
     locked = {}
@@ -53,7 +53,7 @@ def locked_usernames():
     return locked
 
 
-#password checked with AUTH_PASSWORD_VALIDATORS, return list of error messages
+#check password rules, return error messages
 def password_errors(password, user=None):
     try:
         validate_password(password, user)
@@ -66,7 +66,7 @@ def password_errors(password, user=None):
 @admin_required
 def user_list(request):
     locked = locked_usernames()
-    # last login in the same timezone as the job pages (APP_TZ_OFFSET_HOURS), not UTC
+    # last login in APP_TZ_OFFSET_HOURS like the job pages
     rows = [{'user': u, 'role': role_of(u), 'locked': locked.get(u.username, 0),
              'last_login': u.last_login.astimezone(job_runner.TZ).strftime('%Y-%m-%d %H:%M:%S') if u.last_login else ''}
             for u in User.objects.order_by('username')]
@@ -143,7 +143,7 @@ def user_action(request, user_id):
         user.save()
         messages.success(request, f"'{user.username}' enabled.")
     elif action == 'password':
-        # own password: only on /password/ (asks the current password); other user: confirm with the admin's current password
+        # own password only on /password/; others need the admin's password
         if me:
             messages.error(request, 'Change your own password on the Change password page (current password required).')
         elif not request.user.check_password(request.POST.get('admin_password', '')):
@@ -167,5 +167,5 @@ def user_action(request, user_id):
         messages.success(request, f"User '{username}' deleted.")
     else:
         messages.error(request, 'Unknown action.')
-    logger.info('user action %s on %s by %s', action[:20], user.username, request.user.username)    # audit (result in the page message)
+    logger.info('user action %s on %s by %s', action[:20], user.username, request.user.username)
     return redirect('/palo_alto/users')

@@ -22,14 +22,14 @@ from . import views, upload_config, bulk_commit, users, security
 handler500 = 'django_app.security.server_error'
 
 urlpatterns = [
-    # one login page for portal and /admin (brute-force lock, forced password change)
+    # one login page for portal and /admin
     path('admin/login/', RedirectView.as_view(url='/login/', query_string=True)),
     path('admin/', admin.site.urls),
     path('login/', security.LoginView.as_view(template_name='pages/login.html', redirect_authenticated_user=True)),
     path('logout/', auth_views.LogoutView.as_view()),
-    # after a change -> Dashboard with a 'Password changed' message (no separate done page)
+    # back to Dashboard after a password change
     path('password/', security.PasswordChangeView.as_view(template_name='pages/password_change.html', success_url='/')),
-    path('password/done/', RedirectView.as_view(url='/')),           # old link
+    path('password/done/', RedirectView.as_view(url='/')),
     path('favicon.ico', RedirectView.as_view(url='/static/picture/favicon.svg', permanent=True)),   # browsers ask /favicon.ico
     path('',views.index),
     path('palo_alto/',views.palo_alto),

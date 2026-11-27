@@ -94,7 +94,7 @@
 
 {% block script %}
 <script nonce="{{ csp_nonce }}">
-    // rough client-side count (server parses again and is the reference)
+    // rough count, server parses again
     const ta = document.getElementById('targets'), cnt = document.getElementById('ip-count');
     function ipToInt(ip) { const p = ip.split('.').map(Number); return p.length === 4 && p.every(n => n >= 0 && n <= 255) ? ((p[0] << 24) >>> 0) + (p[1] << 16) + (p[2] << 8) + p[3] : null; }
     function count() {
