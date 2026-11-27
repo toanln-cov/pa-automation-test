@@ -48,7 +48,7 @@ Typical use: change requests that add or edit address objects, services, groups,
 
 ## Requirements
 
-- Linux host with Docker and Docker Compose v2 (Docker rootless recommended).
+- Linux host with Docker and Docker Compose v2.
 - Open connections from the tool to the firewall management interfaces on port 443 (HTTPS).
 - (Recommended) Plan a dedicated firewall admin account for the tool, with API access, not shared with other accounts.
 
@@ -78,16 +78,15 @@ Already set up in the tool:
 
 Recommendations for the environment that hosts the tool:
 
-1. **Set up the Docker host with** Docker rootless, running as a normal user. Use the `slirp4netns` port driver (`DOCKERD_ROOTLESS_ROOTLESSKIT_PORT_DRIVER=slirp4netns`) to keep the real client IP in the logs and in the login lockout. Do not add users to the `docker` group of a rootful daemon.
-2. **Restrict access** to port 9198 to the admin network only (network firewall or host firewall), or bind one address only: `'<host-ip>:9198:8443'`.
-3. **Use a trusted certificate**: replace `data/ssl/server.crt` and `server.key`, restart, then you can set `APP_HSTS_SECONDS=31536000`.
-4. **Set `APP_ALLOWED_HOSTS`** to the real names / IPs of the tool.
-5. **Use a dedicated firewall account** for the tool, not a superuser: XML API Configuration, Operational Requests (read version, lock, backup), Commit. REST API for the objects and policies used.
-6. **Set the API key lifetime** on the firewalls (Device > Setup > Management > Authentication Settings): each job creates a new key.
-7. **Verify the firewall certificates** with `APP_PANOS_CA_BUNDLE`.
-8. **Forward the audit log** to syslog / SIEM (`docker logs` is configured by default to keep only about 1 GB).
-9. **Update regularly**: new `ubuntu:24.04` digest, newer `APT_SNAPSHOT` in the Dockerfile, but `requirements.txt` must be regenerated, then rebuild and retest.
-10. **Back up** the data folders `./data/` and `./jobs/`.
+1. **Restrict access** to port 9198 to the admin network only (network firewall or host firewall), or bind one address only: `'<host-ip>:9198:8443'`.
+2. **Use a trusted certificate**: replace `data/ssl/server.crt` and `server.key`, restart, then you can set `APP_HSTS_SECONDS=31536000`.
+3. **Set `APP_ALLOWED_HOSTS`** to the real names / IPs of the tool.
+4. **Use a dedicated firewall account** for the tool, not a superuser: XML API Configuration, Operational Requests (read version, lock, backup), Commit. REST API for the objects and policies used.
+5. **Set the API key lifetime** on the firewalls (Device > Setup > Management > Authentication Settings): each job creates a new key.
+6. **Verify the firewall certificates** with `APP_PANOS_CA_BUNDLE`.
+7. **Forward the audit log** to syslog / SIEM (`docker logs` is configured by default to keep only about 1 GB).
+8. **Update regularly**: new `ubuntu:24.04` digest, newer `APT_SNAPSHOT` in the Dockerfile, but `requirements.txt` must be regenerated, then rebuild and retest.
+9. **Back up** the data folders `./data/` and `./jobs/`.
 
 ## Initial configuration settings
 
