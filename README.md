@@ -40,10 +40,10 @@ Typical use: change requests that add or edit address objects, services, groups,
 
 ## PAN-OS compatibility
 
-| PAN-OS | Status |
-|---|---|
-| 11.1 and later | Supported. Tested on 11.1.4 and 11.1.10. |
-| 10.2, 10.1 | Supported; use the 11.1 behavior until the differences are checked. |
+| PAN-OS                         | Status                                                                         |
+| ------------------------------ | ------------------------------------------------------------------------------ |
+| 11.1 and later                 | Supported. Tested on 11.1.4 and 11.1.10.                                       |
+| 10.2, 10.1                     | Supported; use the 11.1 behavior until the differences are checked.            |
 | 10.0, 9.1, 9.0 and older (EoL) | Not supported. May fail (for example the 9.0 REST URL has a different format). |
 
 ## Requirements
@@ -55,8 +55,8 @@ Typical use: change requests that add or edit address objects, services, groups,
 ## Build the tool
 
 ```sh
-git clone https://github.com/toanln-cov/pa-automation-test.git
-cd pa-automation-test
+git clone https://github.com/toanln-cov/pa-automation.git
+cd pa-automation
 docker compose up -d --build
 ```
 
@@ -92,18 +92,18 @@ Recommendations for the environment that hosts the tool:
 
 Set in `docker-compose.yml` under `environment:`, then run `docker compose up -d`.
 
-| Variable | Default | Meaning |
-|---|---|---|
-| `APP_DEBUG` | `0` | `1` turns on the Django debug page. Not recommended; only for debugging while developing the tool. |
-| `APP_ALLOWED_HOSTS` | `*` | Domain names / IPs used to access the tool, comma separated (for example `10.0.0.5`, `pa-auto.local`). |
-| `APP_TZ_OFFSET_HOURS` | `7` | Time zone for job times (7 = GMT+7). |
-| `APP_CERT_CN` | `pa-automation` | Name in the auto-generated certificate. |
-| `APP_LOGIN_FAILURE_LIMIT` | `5` | Failed logins (per username + IP) before lockout. |
-| `APP_LOGIN_COOLOFF_MINUTES` | `15` | Lockout duration. |
-| `APP_HSTS_SECONDS` | `0` | HSTS max-age. Keep `0` with the self-signed certificate. |
-| `APP_PANOS_CA_BUNDLE` | (empty) | CA bundle path in the container, used to verify the firewall certificates. |
-| `APP_MIN_FREE_DISK_MB` | `100` | New jobs are refused when the free space of the jobs disk is below this value. |
-| `APP_JOB_MAX_SIZE_MB` | `1024` | Above this size, the oldest job results are deleted. `0` = no limit. |
+| Variable                      | Default           | Meaning                                                                                                    |
+| ----------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------- |
+| `APP_DEBUG`                 | `0`             | `1` turns on the Django debug page. Not recommended; only for debugging while developing the tool.       |
+| `APP_ALLOWED_HOSTS`         | `*`             | Domain names / IPs used to access the tool, comma separated (for example `10.0.0.5`, `pa-auto.local`). |
+| `APP_TZ_OFFSET_HOURS`       | `7`             | Time zone for job times (7 = GMT+7).                                                                       |
+| `APP_CERT_CN`               | `pa-automation` | Name in the auto-generated certificate.                                                                    |
+| `APP_LOGIN_FAILURE_LIMIT`   | `5`             | Failed logins (per username + IP) before lockout.                                                          |
+| `APP_LOGIN_COOLOFF_MINUTES` | `15`            | Lockout duration.                                                                                          |
+| `APP_HSTS_SECONDS`          | `0`             | HSTS max-age. Keep `0` with the self-signed certificate.                                                 |
+| `APP_PANOS_CA_BUNDLE`       | (empty)           | CA bundle path in the container, used to verify the firewall certificates.                                 |
+| `APP_MIN_FREE_DISK_MB`      | `100`           | New jobs are refused when the free space of the jobs disk is below this value.                             |
+| `APP_JOB_MAX_SIZE_MB`       | `1024`          | Above this size, the oldest job results are deleted. `0` = no limit.                                     |
 
 ## Troubleshooting
 
