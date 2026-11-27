@@ -55,8 +55,8 @@ Typical use: change requests that add or edit address objects, services, groups,
 ## Build the tool
 
 ```sh
-git clone https://github.com/toanln-cov/pa-automation.git
-cd pa-automation
+git clone https://github.com/toanln-cov/pa-automation-test.git
+cd pa-automation-test
 docker compose up -d --build
 ```
 
