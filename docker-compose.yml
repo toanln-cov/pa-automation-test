@@ -18,6 +18,7 @@ services:
 
   pa-automation:
     image: pa-automation:latest
+    pull_policy: never                # built locally by pa-automation-init
     container_name: pa-automation
     restart: unless-stopped
     depends_on:
