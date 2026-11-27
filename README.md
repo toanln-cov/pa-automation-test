@@ -105,16 +105,9 @@ Set in `docker-compose.yml` under `environment:`, then run `docker compose up -d
 | `APP_MIN_FREE_DISK_MB`      | `100`           | New jobs are refused when the free space of the jobs disk is below this value.                             |
 | `APP_JOB_MAX_SIZE_MB`       | `1024`          | Above this size, the oldest job results are deleted. `0` = no limit.                                     |
 
-## Troubleshooting
+## Troubleshooting command
 
-The container has `curl`, `nc`, `dig` and `traceroute` (no `ping`, because it has no NET_RAW capability). Commands to debug from the container:
-
-```sh
-docker exec pa-automation curl -sk -o /dev/null -w '%{http_code}\n' https://<firewall-ip>/
-docker exec pa-automation nc -zv -w 3 <firewall-ip> 443
-docker exec pa-automation dig +short <firewall-name>
-docker exec pa-automation traceroute -n <firewall-ip>
-```
+The container has `curl`, `nc`, `dig` and `traceroute` command (no `ping`, because it has no NET_RAW capability) for debugging purpose inside the container.
 
 ## Support
 
