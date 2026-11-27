@@ -1,0 +1,190 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Automation Tool{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="{% static 'picture/favicon.svg' %}">
+    <style nonce="{{ csp_nonce }}">
+        :root {
+            --bg: #f4f6f9;
+            --surface: #ffffff;
+            --surface-2: #f8fafc;
+            --border: #e2e8f0;
+            --text: #1e293b;
+            --muted: #64748b;
+            --primary: #fa582d;          /* accent orange */
+            --primary-hover: #e04a21;
+            --primary-soft: #fff1ec;
+            --ok: #15803d;      --ok-soft: #dcfce7;
+            --warn: #b45309;    --warn-soft: #fef3c7;
+            --fail: #b91c1c;    --fail-soft: #fee2e2;
+            --info: #1d4ed8;    --info-soft: #dbeafe;
+            --radius: 10px;
+            --shadow: 0 1px 2px rgba(15, 23, 42, .06), 0 1px 3px rgba(15, 23, 42, .08);
+            --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #0f172a;
+                --surface: #1e293b;
+                --surface-2: #172033;
+                --border: #334155;
+                --text: #e2e8f0;
+                --muted: #94a3b8;
+                --primary-soft: #3b1d14;
+                --ok: #4ade80;      --ok-soft: #14321f;
+                --warn: #fbbf24;    --warn-soft: #3a2a0b;
+                --fail: #f87171;    --fail-soft: #3b1515;
+                --info: #93c5fd;    --info-soft: #172a4d;
+                --shadow: none;
+            }
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; background: var(--bg); color: var(--text);
+            font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        a { color: var(--primary); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        /* header */
+        .topbar {
+            background: var(--surface); border-bottom: 1px solid var(--border);
+            position: sticky; top: 0; z-index: 10;
+        }
+        .topbar-inner {
+            max-width: 1200px; margin: 0 auto; padding: 0 16px; height: 56px;
+            display: flex; align-items: center; gap: 24px;
+        }
+        .brand { display: flex; align-items: center; gap: 10px; color: var(--text); font-weight: 700; font-size: 16px; }
+        .brand:hover { text-decoration: none; }
+        .brand-mark {
+            width: 30px; height: 30px; border-radius: 8px; background: var(--primary); color: #fff;
+            display: grid; place-items: center; font-size: 13px; font-weight: 800; letter-spacing: -.5px;
+        }
+        .nav { display: flex; gap: 4px; margin-left: auto; }
+        .nav a { color: var(--muted); padding: 6px 12px; border-radius: 6px; font-weight: 500; }
+        .nav a:hover { background: var(--surface-2); color: var(--text); text-decoration: none; }
+        .nav a.active { color: var(--primary); background: var(--primary-soft); }
+        .user { display: flex; align-items: center; gap: 10px; margin: 0; padding-left: 16px; border-left: 1px solid var(--border); }
+        .nav a { white-space: nowrap; }
+        /* narrow screen: menu on its own row (wraps), no horizontal page scroll */
+        @media (max-width: 860px) {
+            .topbar-inner { height: auto; flex-wrap: wrap; padding: 8px 16px; gap: 8px 16px; }
+            .nav { order: 3; width: 100%; margin-left: 0; flex-wrap: wrap; }
+            .user { margin-left: auto; }
+        }
+        @media (max-width: 640px) { .user .muted { display: none; } .brand { font-size: 0; gap: 0; } }
+
+        /* layout */
+        .container { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; }
+        .page-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+        .page-head h1 { font-size: 22px; margin: 0; }
+        .page-head p { margin: 2px 0 0; color: var(--muted); }
+        .grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+        @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+
+        .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+        .card-head { padding: 14px 18px; border-bottom: 1px solid var(--border); font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        .card-body { padding: 18px; }
+        .card + .card { margin-top: 20px; }
+
+        /* form */
+        .field { margin-bottom: 16px; }
+        .field label.lbl { display: block; font-weight: 600; margin-bottom: 6px; }
+        .field .hint { color: var(--muted); font-size: 12px; margin-top: 4px; }
+        .row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        @media (max-width: 560px) { .row { grid-template-columns: 1fr; } }
+        input[type=text], input[type=password], select {
+            width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px;
+            background: var(--surface); color: var(--text); font: inherit;
+        }
+        input:focus, select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+        fieldset { border: 0; padding: 0; margin: 0 0 8px; }
+        legend { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; margin-bottom: 10px; }
+
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+            padding: 10px 18px; border-radius: 8px; border: 1px solid transparent;
+            font: inherit; font-weight: 600; cursor: pointer;
+        }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-primary:disabled { opacity: .6; cursor: progress; }
+        .btn-ghost { background: var(--surface); color: var(--text); border-color: var(--border); }
+        .btn-ghost:hover { background: var(--surface-2); text-decoration: none; }
+        .btn-sm { padding: 5px 10px; font-size: 13px; }
+        .btn-block { width: 100%; }
+
+        /* alerts & badges */
+        .alert { padding: 12px 14px; border-radius: 8px; margin-bottom: 20px; border: 1px solid; }
+        .alert-info { background: var(--info-soft); color: var(--info); border-color: transparent; }
+        .alert-success { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+        .alert-fail { background: var(--fail-soft); color: var(--fail); border-color: transparent; white-space: pre-wrap; }
+        .alert-error { background: var(--fail-soft); color: var(--fail); border-color: transparent; }
+        .alert-warning { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+        .badge {
+            display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px;
+            font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+        }
+        .badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+        .badge.running { background: var(--info-soft); color: var(--info); }
+        .badge.running::before { animation: pulse 1.2s infinite; }
+        .badge.done { background: var(--ok-soft); color: var(--ok); }
+        .badge.done-warn { background: var(--warn-soft); color: var(--warn); }
+        .badge.done-fail { background: var(--fail-soft); color: var(--fail); }
+        .badge.failed, .badge.interrupted, .badge.blocked { background: var(--fail-soft); color: var(--fail); }
+        @keyframes pulse { 50% { opacity: .25; } }
+
+        .muted { color: var(--muted); }
+        .mono { font-family: var(--mono); }
+        .footer { text-align: center; color: var(--muted); font-size: 12px; padding: 0 16px 24px; }
+        /* utility classes (CSP: no style="" attributes) */
+        .u-m0 { margin: 0; } .u-mb16 { margin: 0 0 16px; } .u-mt12 { margin-top: 12px; } .u-mt20 { margin-top: 20px; }
+        .u-pull6 { margin: -6px 0 16px; } .u-pull8 { margin-top: -8px; margin-bottom: 16px; }
+        .u-p10 { padding: 10px; } .u-p24 { padding: 24px; }
+        .u-fs12 { font-size: 12px; } .u-fs13 { font-size: 13px; }
+        .u-h20 { font-size: 20px; margin: 0 0 8px; } .u-err-h { font-size: 20px; margin: 4px 0 8px; }
+        .u-w420 { max-width: 420px; width: 100%; } .u-w440 { max-width: 440px; width: 100%; }
+        .u-center { min-height: calc(100vh - 200px); display: grid; place-items: center; }
+        .u-bt { border-top: 1px solid var(--border); } .u-fail { color: var(--fail); } .u-accent { accent-color: var(--primary); }
+        .u-hidden { display: none; }
+        {% block style %}{% endblock %}
+    </style>
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <a class="brand" href="/"><span class="brand-mark">PA</span>Automation Tool</a>
+            {% if user.is_authenticated %}
+            <nav class="nav">
+                <a href="/palo_alto/" class="{% block nav_config %}{% endblock %}">Configure</a>
+                <a href="/palo_alto/commit" class="{% block nav_commit %}{% endblock %}">Commit</a>
+                <a href="/palo_alto/jobs" class="{% block nav_jobs %}{% endblock %}">Job history</a>
+                <a href="/palo_alto/guide" class="{% block nav_guide %}{% endblock %}">Guide</a>
+                <a href="/about/" class="{% block nav_about %}{% endblock %}">About</a>
+                {% if user.is_superuser %}<a href="/palo_alto/users" class="{% block nav_users %}{% endblock %}">Users</a>{% endif %}
+            </nav>
+            <form class="user" method="post" action="/logout/">
+                {% csrf_token %}
+                <a href="/password/" class="muted" title="Change password">{{ user.username }}</a>
+                <button type="submit" class="btn btn-ghost btn-sm">Sign out</button>
+            </form>
+            {% else %}
+            <nav class="nav">
+                <a href="/about/" class="{% if request.path == '/about/' %}active{% endif %}">About</a>
+                <a href="/palo_alto/guide" class="{% if request.path == '/palo_alto/guide' %}active{% endif %}">Guide</a>
+            </nav>
+            {% if request.path != '/login/' %}<div class="user"><a class="btn btn-primary btn-sm" href="/login/">Sign in</a></div>{% endif %}
+            {% endif %}
+        </div>
+    </header>
+    <main class="container">
+        {% for message in messages %}<div class="alert alert-{{ message.tags }}">{{ message }}</div>{% endfor %}
+        {% block content %}{% endblock %}
+    </main>
+    {% block script %}{% endblock %}
+</body>
+</html>

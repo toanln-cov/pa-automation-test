@@ -1,0 +1,100 @@
+{% extends 'pages/base.html' %}
+{% block title %}Users · Automation Tool{% endblock %}
+{% block nav_users %}active{% endblock %}
+
+{% block style %}
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: var(--surface-2); font-weight: 700; }
+    tbody tr:last-child td { border-bottom: 0; }
+    .actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .actions form { display: flex; gap: 6px; margin: 0; }
+    .actions input[type=password] { width: 160px; padding: 5px 8px; }
+    .actions select { width: auto; padding: 5px 8px; }
+    .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+    .pill.admin { background: var(--primary-soft); color: var(--primary); }
+    .pill.user { background: var(--surface-2); color: var(--muted); }
+    .pill.off { background: var(--fail-soft); color: var(--fail); }
+    .pill.locked { background: var(--warn-soft); color: var(--warn); }
+    .btn-danger { background: var(--fail-soft); color: var(--fail); border-color: transparent; }
+    .create { display: grid; grid-template-columns: 1fr 1fr 140px auto; gap: 12px; align-items: end; }
+    @media (max-width: 760px) { .create { grid-template-columns: 1fr; } }
+{% endblock %}
+
+{% block content %}
+    <div class="page-head">
+        <div>
+            <h1>Users</h1>
+            <p>Web accounts of the tool (not firewall accounts). <b>User</b>: use the portal. <b>Admin</b>: use the portal and manage users.</p>
+        </div>
+    </div>
+
+    <form class="card" method="post" action="/palo_alto/users/create">
+        {% csrf_token %}
+        <div class="card-head">Add user</div>
+        <div class="card-body create">
+            <div class="field u-m0"><label class="lbl" for="new-username">Username</label><input type="text" id="new-username" name="username" autocomplete="off" required></div>
+            <div class="field u-m0"><label class="lbl" for="new-password">Password</label><input type="password" id="new-password" name="password" autocomplete="new-password" required></div>
+            <div class="field u-m0"><label class="lbl" for="new-role">Role</label>
+                <select id="new-role" name="role"><option value="user" selected>User</option><option value="admin">Admin</option></select></div>
+            <button type="submit" class="btn btn-primary">Add</button>
+        </div>
+    </form>
+
+    <div class="card">
+        <div class="card-head">Accounts</div>
+        <div class="table-wrap">
+        <table>
+            <thead><tr><th>Username</th><th>Role</th><th>Status</th><th>Last login ({{ tz_label }})</th><th>Actions</th></tr></thead>
+            <tbody>
+            {% for r in rows %}
+                <tr>
+                    <td><b>{{ r.user.username }}</b>{% if r.user.pk == user.pk %} <span class="muted">(you)</span>{% endif %}</td>
+                    <td><span class="pill {{ r.role }}">{{ r.role|capfirst }}</span></td>
+                    <td>
+                        {% if r.user.is_active %}<span class="pill user">Active</span>{% else %}<span class="pill off">Disabled</span>{% endif %}
+                        {% if r.locked %}<span class="pill locked">Locked ({{ r.locked }} failed logins)</span>{% endif %}
+                    </td>
+                    <td>{{ r.last_login|default:"—" }}</td>
+                    <td class="actions">
+                        {% if r.user.pk != user.pk %}
+                        <form method="post" action="/palo_alto/users/{{ r.user.pk }}">{% csrf_token %}<input type="hidden" name="action" value="role">
+                            <select name="role" aria-label="Role of {{ r.user.username }}"><option value="user" {% if r.role == 'user' %}selected{% endif %}>User</option><option value="admin" {% if r.role == 'admin' %}selected{% endif %}>Admin</option></select>
+                            <button class="btn btn-ghost btn-sm" type="submit">Set role</button></form>
+                        <form method="post" action="/palo_alto/users/{{ r.user.pk }}">{% csrf_token %}
+                            <input type="hidden" name="action" value="{% if r.user.is_active %}disable{% else %}enable{% endif %}">
+                            <button class="btn btn-ghost btn-sm" type="submit">{% if r.user.is_active %}Disable{% else %}Enable{% endif %}</button></form>
+                        {% endif %}
+                        {% if r.user.pk == user.pk %}
+                        <a class="btn btn-ghost btn-sm" href="/password/">Change password</a>
+                        {% else %}
+                        <form method="post" action="/palo_alto/users/{{ r.user.pk }}">{% csrf_token %}<input type="hidden" name="action" value="password">
+                            <input type="password" name="password" placeholder="New password" autocomplete="new-password" aria-label="New password for {{ r.user.username }}" required>
+                            <input type="password" name="admin_password" placeholder="Your current password" autocomplete="current-password" aria-label="Your current password" required>
+                            <button class="btn btn-ghost btn-sm" type="submit">Set password</button></form>
+                        {% endif %}
+                        {% if r.locked %}
+                        <form method="post" action="/palo_alto/users/{{ r.user.pk }}">{% csrf_token %}<input type="hidden" name="action" value="unlock">
+                            <button class="btn btn-ghost btn-sm" type="submit">Unlock</button></form>
+                        {% endif %}
+                        {% if r.user.pk != user.pk %}
+                        <form method="post" action="/palo_alto/users/{{ r.user.pk }}" class="confirm-delete" data-name="{{ r.user.username }}">{% csrf_token %}<input type="hidden" name="action" value="delete">
+                            <button class="btn btn-danger btn-sm" type="submit">Delete</button></form>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+{% endblock %}
+
+{% block script %}
+<script nonce="{{ csp_nonce }}">
+    document.querySelectorAll('form.confirm-delete').forEach(f => f.addEventListener('submit', e => {
+        if (!confirm('Delete user "' + f.dataset.name + '"?')) e.preventDefault();
+    }));
+</script>
+{% endblock %}

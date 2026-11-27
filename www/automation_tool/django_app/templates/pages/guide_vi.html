@@ -1,0 +1,127 @@
+{% load static %}
+    <div class="guide">
+        <nav class="card toc">
+            <div class="card-body u-p10">
+                <a href="#overview">Tổng quan</a>
+                <a href="#order">Thứ tự thực thi</a>
+                <a href="#templates">Template &amp; các sheet</a>
+                <a href="#sheets">Các sheet</a>
+                <a href="#limits">Giới hạn</a>
+                <a href="#dryrun">Dry-run</a>
+                <a href="#duplicate">Stop duplicated</a>
+                <a href="#commit">Commit check &amp; Commit</a>
+            </div>
+        </nav>
+
+        <div>
+
+            <details class="card fold" id="overview" open>
+                <summary class="card-head"><h2>Tổng quan</h2></summary>
+                <div class="card-body">
+                    <ul>
+                        <li>Điền template Excel, upload ở trang <a href="/palo_alto/">Configure</a>. Tool áp dụng từng dòng lên các firewall Palo Alto trong cột <code>Device-ip</code> qua PAN-OS REST API.</li>
+                        <li><b>Tool hỗ trợ:</b>
+                            <ul>
+                                <li><b>Tạo mới:</b> tag, address object, address group (tĩnh), service object, service group, security rule, NAT rule.</li>
+                                <li><b>Sửa:</b> tag, address object, address group, service object, service group, security rule, NAT rule.</li>
+                                <li><b>Không hỗ trợ xóa:</b> hành động xóa có thể gây ảnh hưởng lớn, nên khuyến nghị chủ động xóa thủ công trên firewall.</li>
+                            </ul>
+                        </li>
+                        <li>Xem các job đang chạy và đã chạy xong trong <a href="/palo_alto/jobs">Job history</a>.</li>
+                        <li>Job cấu hình chỉ ghi vào <b>candidate config</b> và không commit trên firewall, để giảm thiểu tối đa ảnh hưởng. Admin cần review, rồi thực hiện commit check và commit ở tab <a href="/palo_alto/commit">Commit</a> riêng.</li>
+                        <li>Tool chỉ chạy một job tại một thời điểm.</li>
+                        <li><b>Không hỗ trợ Panorama:</b> tool không cấu hình Panorama và không hỗ trợ firewall do Panorama quản lý, để tránh xung đột cấu hình.</li>
+                        <li><b>Phiên bản PAN-OS:</b> chỉ các phiên bản còn được hỗ trợ trên portal API của Palo Alto (11.1 trở lên, 10.2, 10.1).</li>
+                    </ul>
+                </div>
+            </details>
+
+            <details class="card fold" id="order" open>
+                <summary class="card-head"><h2>Thứ tự thực thi</h2></summary>
+                <div class="card-body">
+                    <ol class="steps">
+                        <li><span><b>Kiểm tra file</b> — tên sheet và tên cột phải đúng như template, nếu không file bị từ chối.</span></li>
+                        <li><span><b>Đăng nhập</b> — mỗi firewall lấy một API key dùng cho cả job. Những Firewall sai mật khẩu hoặc không kết nối được thì bỏ qua, các dòng cấu hình cho firewall khác vẫn chạy. Nếu mọi firewall đều lỗi → bị từ chối trước khi tạo job).</span></li>
+                        <li><span><b>Lần lượt với từng firewall được deploy theo thứ tự:</b>
+                            <b>Lấy firewall version để mapping API version</b> → <b>Config lock</b> → <b>Backup cấu hình</b> (snapshot <code>Auto-&lt;ngày giờ&gt;.xml</code>) → <b>Cấu hình từng dòng từ file import</b> → <b>Gỡ config lock</b> → Tiếp tục cycle với firewall tiếp theo.</span></li>
+                        <li><span><b>Thứ tự dòng cấu hình</b>: Tool sẽ thực hiện tuần tự từ trên xuống dưới</span></li>
+                        <li><span><b>Luôn unlock config</b> ở bước cuối, kể cả deploy lỗi khi có lỗi.</span></li>
+                    </ol>
+                    <p><b>Config lock</b>: trong lúc job chạy, tool khóa cấu hình trên firewall để admin khác không sửa cùng lúc, xong firewall đó thì tự gỡ khóa. Firewall đang bị admin khác khóa → tool không ghi gì vào firewall đó và báo trong kết quả job.</p>
+                </div>
+            </details>
+
+            <details class="card fold" id="templates">
+                <summary class="card-head"><h2>Template &amp; các sheet</h2></summary>
+                <div class="card-body">
+                    <p><b>Sử dụng 1 file template duy nhất.</b></p>
+                    <div class="tpl-links">
+                        <a href="{% static 'import_template/template.xlsx' %}"><img src="{% static 'picture/excel_logo.svg' %}" alt="">template.xlsx</a>
+                    </div>
+                    <table class="t">
+                        <tr><th>Thứ tự chạy</th><th>Sheet (luôn theo thứ tự này, bất kể thứ tự sheet trong file)</th></tr>
+                        <tr><td>1. Các sheet add</td><td><code>add_tag</code> → <code>add_address_object</code> → <code>add_address_group</code> → <code>add_service_object</code> → <code>add_service_group</code> → <code>add_security_rule</code> → <code>add_nat_rule</code></td></tr>
+                        <tr><td>2. Các sheet edit</td><td><code>edit_tag</code> → <code>edit_address_object</code> → <code>edit_address_group</code> → <code>edit_service_object</code> → <code>edit_service_group</code> → <code>edit_security_rule</code> → <code>edit_nat_rule</code></td></tr>
+                    </table>
+                    <p><b>Ghi chú:</b></p>
+                    <ul>
+                        <li>File import chỉ chứa những sheet cần dùng. Sheet nào không cần thì xóa khỏi file (để lại sheet trống → cả file bị từ chối). Ví dụ chỉ thêm address và gắn vào rule có sẵn → file chỉ có <code>add_address_object</code> và <code>edit_security_rule</code>.</li>
+                        <li>Trong một sheet, Tool sẽ cấu hình theo thứ tự từng dòng từ trên xuống theo người dùng sắp xếp.</li>
+                        <li>Hỗ trợ cấu hình nhiều vsys trên cùng Firewall (bao gồm cả vsys shared).</li>
+                        <li>Màu header: đỏ = bắt buộc, vàng = bắt buộc tùy trường hợp, xanh = tùy chọn.</li>
+                        <li>Dòng 2 mỗi sheet là dòng ví dụ: thay hoặc xóa trước khi upload.</li>
+                        <li>Chỉ nhập giá trị, không dùng công thức Excel. Ô có ký tự vô hình hoặc lỗi Excel bị từ chối kèm vị trí ô.</li>
+                        <li>Danh sách cách nhau dấu phẩy, không thừa dấu phẩy, không lặp tên.</li>
+                        <li>Sheet edit: Tool đọc cấu hình hiện tại trên firewall, chỉ thay những gì điền trong file, các phần khác giữ nguyên. Không đổi tên, không chuyển vsys.</li>
+                        <li>Sheet edit object (edit_tag, edit_address_object, edit_service_object): Tool thực hiện thay đổi toàn bộ giá trị thành giá trị mới (không sử dụng Edit-*-Mode), ô trống = giữ nguyên, <code>none</code> = xóa.</li>
+                        <li>Sheet edit rule và group: mỗi cột có cột chế độ <code>Edit-&lt;Cột&gt;-mode</code>: <code>add</code> (thêm vào danh sách), <code>remove</code> (bỏ khỏi danh sách), <code>replace</code> (thay giá trị / cả danh sách, <code>none</code> = xóa), <code>remain</code> hoặc trống (giữ nguyên). Chi tiết ở từng sheet.</li>
+                    </ul>
+                    <p><b>Shared</b> (sheet object, group, service, tag): ghi <code>Vsys</code> = <code>shared</code> để đặt object vào shared, mọi vsys của firewall đều dùng được. Lưu ý:</p>
+                    <ul>
+                        <li>Group / tag của object ở shared chỉ dùng được object / tag ở shared.</li>
+                        <li>Rule luôn nằm trong vsys: <code>shared</code> ở sheet rule → file bị từ chối.</li>
+                        <li>Không tạo được object ở vsys trùng tên object ở shared (<code>... already exists in shared</code>); trùng giá trị → <code>Warning: Duplicate Value with X (shared)</code>.</li>
+                        <li>Sheet edit sửa được entry ở shared (<code>Vsys</code> = <code>shared</code>).</li>
+                    </ul>
+                </div>
+            </details>
+
+            {% include 'pages/guide_sheets.html' %}
+
+            <details class="card fold" id="dryrun">
+                <summary class="card-head"><h2>Dry-run</h2></summary>
+                <div class="card-body">
+                    <p><b>Dry-run</b> chỉ lấy thông tin từ firewall, không ghi gì, và báo trước kết quả của từng dòng: <code>CAN CREATE</code> / <code>CAN EDIT</code> / <code>CAN MOVE</code> hoặc lỗi. Dry-run kiểm tra giá trị từ file cấu hình từ admin có đúng định dạng không, có khả thi khi cấu hình thực tế vào Firewall không.</p>
+                    <p>Dry-run cover phần lớn các trường hợp trước khi Install, nhưng không phải 100% (ví dụ interface, source user không được kiểm tra).</p>
+                    <p>Cho nên khuyến nghị là luôn chạy Dry-run trước để giảm thiểu lỗi input. Từ đó admin có thể xem lại kết quả, rồi chạy Install.</p>
+                </div>
+            </details>
+
+            <details class="card fold" id="duplicate">
+                <summary class="card-head"><h2>Stop duplicated</h2></summary>
+                <div class="card-body">
+                    <p><b>Stop duplicated</b> (chỉ có ở Install) dùng để tránh tạo cấu hình tạo thêm một object/rule mới có trùng giá trị với object/rule cũ đã có trên firewall. Mục đích của tính năng này chỉ để bớt tạo các object/rule thừa.</p>
+                    <ul>
+                        <li><b>Tick:</b> Dòng trùng giá trị bị bỏ qua, không tạo. Các dòng khác vẫn chạy bình thường.</li>
+                        <li><b>Không tick:</b> dòng trùng vẫn được tạo, kết quả kèm cảnh báo trùng.</li>
+                    </ul>
+                    <p>Khi sử dụng Dry-run, Tool luôn kiểm tra trùng giá trị này để cảnh báo các object/rule bị có cùng giá trị với giá trị định tạo.</p>
+                </div>
+            </details>
+
+            <details class="card fold" id="commit">
+                <summary class="card-head"><h2>Commit check &amp; Commit</h2></summary>
+                <div class="card-body">
+                    <p><b>Mục đích:</b> job cấu hình bằng template chỉ ghi vào candidate config, không tự commit. Sau khi job chạy xong, quản trị viên xem lại kết quả và cấu hình trên firewall, rồi tự quyết định chạy commit check hoặc commit. Như vậy mọi thay đổi chỉ có hiệu lực khi có quản trị viên kiểm soát và chấp thuận, giảm rủi ro áp dụng nhầm cấu hình.</p>
+                    <p>Thực hiện ở trang <a href="/palo_alto/commit">Commit</a>, tách riêng khỏi template. Nhập IP firewall (IP đơn, dải <code>a-b</code>, CIDR), username và password.</p>
+                    <ul>
+                        <li><b>Commit check</b>: chỉ kiểm tra (validate), không áp dụng gì. Chạy trước và xem kết quả từng firewall.</li>
+                        <li><b>Commit</b>: áp dụng candidate config.</li>
+                        <li>Phạm vi, cho cả Commit check và Commit (bắt buộc chọn, không có mặc định): <i>chỉ thay đổi của user này</i> (partial) hoặc <i>toàn bộ thay đổi</i>.</li>
+                        <li>Tối đa 5 firewall song song. Firewall không có thay đổi chờ commit sẽ được bỏ qua.</li>
+                    </ul>
+                </div>
+            </details>
+
+        </div>
+    </div>

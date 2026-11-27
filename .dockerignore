@@ -1,0 +1,18 @@
+.git
+local_only
+data
+jobs
+**/__pycache__
+**/.DS_Store
+*.md
+# local only, same as .gitignore: never sent to the image build
+.claude
+CLAUDE.local.md
+*.env
+.venv
+venv
+**/*.log
+.idea
+.vscode
+**/*.swp
+**/~$*

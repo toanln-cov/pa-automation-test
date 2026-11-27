@@ -1,0 +1,14 @@
+{% extends 'pages/base.html' %}
+{% block title %}Locked · Automation Tool{% endblock %}
+
+{% block content %}
+<div class="u-center">
+    <div class="card u-w420">
+        <div class="card-body u-p24">
+            <h1 class="u-h20">Too many failed attempts</h1>
+            <p class="muted u-mb16">This account is locked from your address after {{ failure_limit }} failed logins. Try again in {{ cooloff_minutes }} minute{{ cooloff_minutes|pluralize }}.</p>
+            <p class="muted u-fs12 u-m0">An Admin can unlock it on the Users page.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

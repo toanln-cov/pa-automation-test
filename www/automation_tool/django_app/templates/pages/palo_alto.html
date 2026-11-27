@@ -1,0 +1,151 @@
+{% extends 'pages/base.html' %}
+{% load static %}
+{% block title %}Palo Alto · Configure{% endblock %}
+{% block nav_config %}active{% endblock %}
+
+{% block style %}
+    .dropzone {
+        position: relative; border: 2px dashed var(--border); border-radius: var(--radius);
+        padding: 26px 16px; text-align: center; background: var(--surface-2); cursor: pointer;
+        transition: border-color .12s, background .12s;
+    }
+    .dropzone:hover, .dropzone.drag { border-color: var(--primary); background: var(--primary-soft); }
+    .dropzone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+    .dropzone .dz-icon { font-size: 26px; line-height: 1; margin-bottom: 6px; }
+    .dropzone .dz-file { margin-top: 6px; font-weight: 600; color: var(--primary); word-break: break-all; }
+
+    .switch { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+    .switch input { margin-top: 3px; width: 16px; height: 16px; accent-color: var(--primary); }
+    .switch b { display: block; }
+
+
+    .tpl { display: flex; align-items: center; gap: 12px; color: var(--text); }
+    .tpl:hover { text-decoration: none; }
+    .tpl img { width: 40px; height: 40px; }
+    .tpl b { display: block; }
+{% endblock %}
+
+{% block content %}
+    <div class="page-head">
+        <div>
+            <h1>Palo Alto · Configure</h1>
+            <p>Upload the Excel template, the tool applies each sheet in order and reports the result per row.</p>
+        </div>
+    </div>
+
+    {% if running_job %}
+    <div class="alert alert-info">A job is running: <a href="/palo_alto/job/{{ running_job }}" class="mono">{{ running_job }}</a> — wait until it finished before submitting a new one.</div>
+    {% endif %}
+    {% if error %}
+    <div class="alert alert-fail">{{ error }}</div>
+    {% endif %}
+
+    <div class="grid">
+        <form class="card" action="/palo_alto/upload" method="post" enctype="multipart/form-data" id="cfg-form">
+            {% csrf_token %}
+            <div class="card-head">New configuration job</div>
+            <div class="card-body">
+                <fieldset>
+                    <legend>Firewall credentials</legend>
+                    <div class="row">
+                        <div class="field">
+                            <label class="lbl" for="username">Username</label>
+                            <input type="text" id="username" name="username" autocomplete="username" required>
+                        </div>
+                        <div class="field">
+                            <label class="lbl" for="password">Password</label>
+                            <input type="password" id="password" name="password" autocomplete="current-password" required>
+                        </div>
+                    </div>
+                    <div class="hint muted u-pull8">Every firewall in one file (the <code>Device-ip</code> column) must use the same credentials. The tool never stores the firewall password.</div>
+                </fieldset>
+
+                <fieldset>
+                    <legend>Job</legend>
+                    <div class="field">
+                        <label class="lbl" for="config_type_value">Configure type</label>
+                        <select id="config_type_value" name="config_type_value" required>
+                            <option value="dry-run" selected>Dry-run</option>
+                            <option value="install">Install</option>
+                        </select>
+                        <div class="hint"><b>Recommended:</b><br>
+                            Step 1 &mdash; (Optional) <b>Dry-run</b>: the tool configures nothing on the firewall. The tool only checks that each row is valid and whether it would fail if configured on the firewall. You can skip this step, but it is recommended.<br>
+                            Step 2 &mdash; <b>Install</b>: configure the firewall from the uploaded file (no commit).<br>
+                            Step 3 &mdash; Go to the <a href="/palo_alto/jobs">Job history</a> tab to review the result.<br>
+                            Step 4 &mdash; When the result is OK, go to the <a href="/palo_alto/commit">Commit</a> tab (Commit check, then Commit) to commit the configuration.</div>
+                    </div>
+
+                    <div class="field">
+                        <label class="lbl" for="file">Excel file</label>
+                        <div class="dropzone" id="dropzone">
+                            <input type="file" name="file" id="file" accept=".xlsx" required>
+                            <div class="dz-icon">&#128196;</div>
+                            <div><b>Click to choose</b> or drag &amp; drop the Excel file here</div>
+                            <div class="muted u-fs12">.xlsx only</div>
+                            <div class="dz-file" id="dz-file"></div>
+                        </div>
+                    </div>
+
+                    <label class="switch" for="stop_duplicate" id="stop-duplicate-box">
+                        <input type="checkbox" value="stop_duplicate" id="stop_duplicate" name="stop_duplicate">
+                        <span>
+                            <b>Stop duplicated</b>
+                            <span class="muted">Skip rows that duplicate the value of an existing object / rule. Unchecked: still create and show a warning. A name already used is always an error.</span>
+                        </span>
+                    </label>
+                    <label class="switch" for="allow_disable" id="allow-disable-box">
+                        <input type="checkbox" value="allow_disable" id="allow_disable" name="allow_disable">
+                        <span>
+                            <b>Allow disabling / enabling rules</b>
+                            <span class="muted">Needed when an edit rule sheet has <code>Disable</code> = <code>yes</code> / <code>no</code>: disabling or enabling a rule changes the traffic at the next commit. Not ticked: the file is refused, nothing is sent.</span>
+                        </span>
+                    </label>
+                </fieldset>
+            </div>
+            <div class="card-body u-bt">
+                <button type="submit" class="btn btn-primary btn-block" id="submit-btn">Start job</button>
+            </div>
+        </form>
+
+        <div>
+            <div class="card">
+                <div class="card-head">Templates</div>
+                <div class="card-body">
+                    <a class="tpl" href="{% static 'import_template/template.xlsx' %}">
+                        <img src="{% static 'picture/excel_logo.svg' %}" alt="">
+                        <span><b>template.xlsx</b><span class="muted">Add: tags, address / service objects &amp; groups, security &amp; NAT rules · Edit: the same</span></span>
+                    </a>
+                    <div class="muted u-fs12 u-mt12"><b>One file, add and edit together.</b> Keep only the sheets you need (delete the others). Sheets run in a fixed order: every add sheet, then every edit sheet. Column <code>Vsys</code> is required on every row (<code>vsys1</code>, <code>vsys2</code>... or <code>shared</code>). No delete: delete on the firewall by hand.</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-head">How it works</div>
+                <div class="card-body">
+                    <div class="muted">Job types, execution order, dry-run, config lock, backup, result codes and the commit feature are explained in the <a href="/palo_alto/guide">Guide</a>.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block script %}
+<script nonce="{{ csp_nonce }}">
+    const dz = document.getElementById('dropzone'), input = document.getElementById('file'), label = document.getElementById('dz-file');
+    input.addEventListener('change', () => { label.textContent = input.files.length ? input.files[0].name : ''; });
+    ['dragenter', 'dragover'].forEach(e => dz.addEventListener(e, () => dz.classList.add('drag')));
+    ['dragleave', 'drop'].forEach(e => dz.addEventListener(e, () => dz.classList.remove('drag')));
+    // Install: push to the firewall (option Stop duplicated); Dry-run: read only check, no option
+    const mode = document.getElementById('config_type_value');
+    const installOnly = ['stop-duplicate-box', 'allow-disable-box'].map(id => document.getElementById(id));
+    const syncMode = () => {
+        const install = mode.value === 'install';
+        installOnly.forEach(box => { box.style.display = install ? '' : 'none'; box.querySelector('input').disabled = !install; });
+    };
+    mode.addEventListener('change', syncMode); syncMode();
+    // prevent double submit
+    document.getElementById('cfg-form').addEventListener('submit', () => {
+        const b = document.getElementById('submit-btn'); b.disabled = true; b.textContent = 'Checking login & starting job...';
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,115 @@
+{% extends 'pages/base.html' %}
+{% block title %}Automation Tool{% endblock %}
+
+{% block style %}
+    .hero { display: grid; grid-template-columns: 1.4fr 1fr; gap: 20px; margin-bottom: 20px; }
+    @media (max-width: 860px) { .hero { grid-template-columns: 1fr; } }
+    .vendor { display: flex; flex-direction: column; }
+    .vendor-top { display: flex; gap: 16px; align-items: center; padding: 20px; border-bottom: 1px solid var(--border); }
+    .vendor-icon { width: 56px; height: 56px; flex: none; border-radius: 12px; background: var(--primary-soft); color: var(--primary); display: grid; place-items: center; }
+    .vendor-top h2 { margin: 0; font-size: 18px; }
+    .vendor-top p { margin: 2px 0 0; color: var(--muted); }
+    .features { list-style: none; margin: 0; padding: 16px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+    @media (max-width: 560px) { .features { grid-template-columns: 1fr; } }
+    .features li { display: flex; gap: 8px; align-items: baseline; }
+    .features li::before { content: "✓"; color: var(--ok); font-weight: 700; }
+    .vendor-actions { margin-top: auto; padding: 16px 20px; border-top: 1px solid var(--border); display: flex; gap: 8px; flex-wrap: wrap; }
+    .flow { list-style: none; margin: 0; padding: 16px 20px; counter-reset: s; }
+    .flow li { counter-increment: s; display: flex; gap: 12px; padding: 8px 0; }
+    .flow li::before { content: counter(s); width: 24px; height: 24px; flex: none; border-radius: 50%; background: var(--primary); color: #fff;
+                       font-size: 12px; font-weight: 700; display: grid; place-items: center; }
+    .flow b { display: block; }
+    .flow span { color: var(--muted); font-size: 13px; }
+    .running { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 18px; margin-bottom: 20px; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: var(--surface-2); font-weight: 700; }
+    tbody tr:last-child td { border-bottom: 0; }
+    .empty { padding: 24px; text-align: center; color: var(--muted); }
+    .card-head .more { margin-left: auto; font-weight: 400; font-size: 13px; }
+{% endblock %}
+
+{% block content %}
+    <div class="page-head">
+        <div>
+            <h1>Firewall Automation</h1>
+            <p>Push firewall configuration from an Excel template — review with dry-run, apply, then commit when ready.</p>
+        </div>
+    </div>
+
+    {% if running_job %}
+    <div class="card running">
+        <span><span class="badge running">running</span> A job is in progress.</span>
+        <a class="btn btn-ghost btn-sm" href="/palo_alto/job/{{ running_job }}">Open job</a>
+    </div>
+    {% endif %}
+
+    <div class="hero">
+        <div class="card vendor">
+            <div class="vendor-top">
+                <div class="vendor-icon" aria-hidden="true">
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M3 14h18M9 4v5M15 9v5M9 14v6"/>
+                    </svg>
+                </div>
+                <div>
+                    <h2>PAN-OS firewalls</h2>
+                    <p>Via PAN-OS REST / XML API · candidate config only, never auto-commit</p>
+                </div>
+            </div>
+            <ul class="features">
+                <li>Address objects &amp; groups</li>
+                <li>Service objects &amp; groups</li>
+                <li>Security rules (create / edit / delete)</li>
+                <li>NAT rules (create / edit / delete)</li>
+                <li>Dry-run with reference checks</li>
+                <li>Config lock + backup before each job</li>
+                <li>Bulk commit check &amp; commit</li>
+                <li>Multi-vsys (Vsys column)</li>
+            </ul>
+            <div class="vendor-actions">
+                <a class="btn btn-primary" href="/palo_alto/">Configure</a>
+                <a class="btn btn-ghost" href="/palo_alto/commit">Commit</a>
+                <a class="btn btn-ghost" href="/palo_alto/guide">Guide</a>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-head">Recommended workflow</div>
+            <ol class="flow">
+                <li><div><b>Fill a template</b><span>add and edit in one file — keep only the sheets you need</span></div></li>
+                <li><div><b>Dry-run</b><span>read-only check of every row against the firewalls</span></div></li>
+                <li><div><b>Install</b><span>write to the candidate config (lock + backup first)</span></div></li>
+                <li><div><b>Review the job result</b><span>in Job history</span></div></li>
+                <li><div><b>Commit check, then Commit</b><span>on the Commit page</span></div></li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-head">Recent jobs <a class="more" href="/palo_alto/jobs">All jobs ({{ job_count }}) →</a></div>
+        {% if recent_jobs %}
+        <div class="table-wrap">
+        <table>
+            <thead><tr><th>Job</th><th>Status</th><th>Started ({{ tz_label }})</th><th>Type</th><th>By</th><th>OK</th><th>Fail</th></tr></thead>
+            <tbody>
+            {% for job in recent_jobs %}
+                <tr>
+                    <td><a class="mono" href="/palo_alto/job/{{ job.id }}">{{ job.id }}</a></td>
+                    <td><span class="badge {{ job.badge }}">{{ job.badge_text }}</span></td>
+                    <td>{{ job.started }}</td>
+                    <td>{% if job.mode == 'dry-run' %}Dry-run{% elif job.mode == 'validate' %}Commit check{% elif job.mode == 'commit' %}Commit{% else %}Install{% endif %}{% if job.operation %} &middot; {{ job.operation|capfirst }}{% endif %}</td>
+                    <td>{{ job.submitted_by|default:"—" }}</td>
+                    <td>{{ job.ok|default_if_none:"" }}</td>
+                    <td>{{ job.fail|default_if_none:"" }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <div class="empty">No job yet. Start with a <a href="/palo_alto/">dry-run</a>.</div>
+        {% endif %}
+    </div>
+{% endblock %}

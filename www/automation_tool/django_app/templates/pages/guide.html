@@ -1,0 +1,74 @@
+{% extends 'pages/base.html' %}
+{% load static %}
+{% block title %}Guide · Automation Tool{% endblock %}
+{% block nav_guide %}active{% endblock %}
+
+{% block style %}
+    .guide { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; align-items: start; }
+    @media (max-width: 860px) { .guide { grid-template-columns: 1fr; } .toc { position: static !important; } }
+    .toc { position: sticky; top: 76px; }
+    .toc a { display: block; padding: 6px 12px; border-radius: 6px; color: var(--muted); }
+    .toc a:hover { background: var(--surface-2); color: var(--text); text-decoration: none; }
+    .card h2 { font-size: 16px; margin: 0; }
+    .card p, .card li { line-height: 1.6; }
+    .card ul, .card ol { padding-left: 20px; margin: 8px 0; }
+    code { font-family: var(--mono); font-size: 12px; background: var(--surface-2); padding: 1px 6px; border-radius: 4px; }
+    .steps { list-style: none; margin: 0; padding: 0; counter-reset: s; }
+    .steps li { counter-increment: s; display: flex; gap: 10px; align-items: flex-start; padding: 6px 0; }
+    .steps li::before {
+        content: counter(s); flex: 0 0 22px; height: 22px; border-radius: 50%; margin-top: 1px;
+        background: var(--surface-2); border: 1px solid var(--border); color: var(--muted);
+        display: grid; place-items: center; font-size: 11px; font-weight: 700;
+    }
+    table.t { width: 100%; border-collapse: collapse; margin: 8px 0; }
+    table.t th, table.t td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; vertical-align: top; }
+    table.t th { background: var(--surface-2); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+    .tpl-links { display: flex; gap: 12px; flex-wrap: wrap; }
+    .tpl-links a { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; color: var(--text); }
+    .tpl-links a:hover { border-color: var(--primary); text-decoration: none; }
+    .tpl-links img { width: 22px; height: 22px; }
+    .card + .card { margin-top: 16px; }
+    .lang { display: flex; gap: 8px; }
+    details.fold > summary, details.sheet > summary, .sheet-body details > summary { cursor: pointer; list-style: none; }
+    details.fold > summary::-webkit-details-marker, details.sheet > summary::-webkit-details-marker, .sheet-body details > summary::-webkit-details-marker { display: none; }
+    details.fold > summary h2::before { content: '▸ '; color: var(--muted); }
+    details.fold[open] > summary h2::before { content: '▾ '; }
+    details.sheet { border: 1px solid var(--border); border-radius: 8px; margin: 8px 0; }
+    details.sheet > summary { padding: 10px 14px; }
+    details.sheet > summary::before { content: '▸ '; color: var(--muted); }
+    details.sheet[open] > summary::before { content: '▾ '; }
+    details.sheet[open] > summary { border-bottom: 1px solid var(--border); background: var(--surface-2); }
+    .sheet-body { padding: 4px 14px 12px; }
+    .sheet-body details { margin-top: 10px; }
+    .sheet-body details > summary { font-weight: 600; }
+    .sheet-body details > summary::before { content: '▸ '; color: var(--muted); }
+    .sheet-body details[open] > summary::before { content: '▾ '; }
+{% endblock %}
+
+{% block script %}
+<script nonce="{{ csp_nonce }}">
+    // a link to a section (table of contents, #sheet-add_tag...) opens it and the sections around it
+    const openTarget = () => {
+        const el = location.hash ? document.getElementById(location.hash.slice(1)) : null;
+        for (let node = el; node; node = node.parentElement) { if (node.tagName === 'DETAILS') node.open = true; }
+        if (el) el.scrollIntoView();
+    };
+    window.addEventListener('hashchange', openTarget);
+    openTarget();
+</script>
+{% endblock %}
+
+{% block content %}
+    <div class="page-head">
+        <div>
+            <h1>{% if lang == 'vi' %}Hướng dẫn{% else %}Guide{% endif %}</h1>
+            <p>{% if lang == 'vi' %}Hướng dẫn sử dụng: cách tool chạy, từng sheet (cột, ví dụ), giới hạn. Bấm vào từng mục để mở.{% else %}User guide: how the tool runs, every sheet (columns, examples), limits. Click a section to open it.{% endif %}</p>
+        </div>
+        <div class="lang">
+            <a href="?lang=en" class="btn btn-sm {% if lang == 'vi' %}btn-ghost{% else %}btn-primary{% endif %}">English</a>
+            <a href="?lang=vi" class="btn btn-sm {% if lang == 'vi' %}btn-primary{% else %}btn-ghost{% endif %}">Tiếng Việt</a>
+        </div>
+    </div>
+
+    {% if lang == 'vi' %}{% include 'pages/guide_vi.html' %}{% else %}{% include 'pages/guide_en.html' %}{% endif %}
+{% endblock %}

@@ -1,0 +1,44 @@
+{# Sheet reference of the Guide (EN / VI): one collapsible card per sheet, built from template_spec + guide_content #}
+            <div class="card" id="sheets">
+                <div class="card-head"><h2>{% if lang == 'vi' %}Các sheet{% else %}Sheets{% endif %}</h2></div>
+                <div class="card-body">
+                    <p class="muted">{% if lang == 'vi' %}Bấm vào tên sheet để mở chi tiết. Thứ tự dưới đây là thứ tự tool chạy.{% else %}Click a sheet to open its details. The order below is the order the tool runs them.{% endif %}</p>
+                    {% for s in sheets %}
+                    <details class="sheet" id="sheet-{{ s.name }}">
+                        <summary><code>{{ s.name }}</code> <span class="muted">{{ s.synopsis }}</span></summary>
+                        <div class="sheet-body">
+                            <details open>
+                                <summary>{% if lang == 'vi' %}Các cột{% else %}Columns{% endif %}</summary>
+                                <table class="t">
+                                    <tr><th>{% if lang == 'vi' %}Cột{% else %}Column{% endif %}</th><th>{% if lang == 'vi' %}Bắt buộc{% else %}Required{% endif %}</th><th>{% if lang == 'vi' %}Giá trị{% else %}Choices{% endif %}</th><th>{% if lang == 'vi' %}Ý nghĩa{% else %}Description{% endif %}</th></tr>
+                                    {% for c in s.columns %}<tr><td><code>{{ c.name }}</code></td><td>{{ c.required }}</td><td>{{ c.choices }}</td><td>{{ c.text }}</td></tr>
+                                    {% endfor %}
+                                </table>
+                            </details>
+                            {% if s.notes %}
+                            <details>
+                                <summary>{% if lang == 'vi' %}Lưu ý{% else %}Notes{% endif %}</summary>
+                                <ul>{% for n in s.notes %}<li>{{ n }}</li>{% endfor %}</ul>
+                            </details>
+                            {% endif %}
+                            <details>
+                                <summary>{% if lang == 'vi' %}Ví dụ{% else %}Examples{% endif %}</summary>
+                                {% if s.intro %}<p class="muted">{{ s.intro }}</p>{% endif %}
+                                <table class="t">
+                                    <tr><th>{% if lang == 'vi' %}Nhu cầu{% else %}Use case{% endif %}</th><th>{% if lang == 'vi' %}Điền{% else %}Fill in{% endif %}</th><th>{% if lang == 'vi' %}Kết quả{% else %}Result{% endif %}</th></tr>
+                                    {% for e in s.examples %}<tr><td>{{ e.case }}</td><td><code>{{ e.cells }}</code></td><td>{{ e.result }}</td></tr>
+                                    {% endfor %}
+                                </table>
+                            </details>
+                        </div>
+                    </details>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <details class="card fold" id="limits">
+                <summary class="card-head"><h2>{% if lang == 'vi' %}Giới hạn của tool{% else %}Limits of the tool{% endif %}</h2></summary>
+                <div class="card-body">
+                    <ul>{% for l in limits %}<li>{{ l }}</li>{% endfor %}</ul>
+                </div>
+            </details>

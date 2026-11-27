@@ -1,0 +1,127 @@
+{% load static %}
+    <div class="guide">
+        <nav class="card toc">
+            <div class="card-body u-p10">
+                <a href="#overview">Overview</a>
+                <a href="#order">Execution order</a>
+                <a href="#templates">Template &amp; sheets</a>
+                <a href="#sheets">Sheets</a>
+                <a href="#limits">Limits</a>
+                <a href="#dryrun">Dry-run</a>
+                <a href="#duplicate">Stop duplicated</a>
+                <a href="#commit">Commit check &amp; Commit</a>
+            </div>
+        </nav>
+
+        <div>
+
+            <details class="card fold" id="overview" open>
+                <summary class="card-head"><h2>Overview</h2></summary>
+                <div class="card-body">
+                    <ul>
+                        <li>You fill an Excel template, upload it on <a href="/palo_alto/">Configure</a>, the tool applies every row to the Palo Alto firewalls in the <code>Device-ip</code> column through the PAN-OS REST API.</li>
+                        <li><b>What the tool does:</b>
+                            <ul>
+                                <li><b>Create:</b> tags, address objects, address groups (static), service objects, service groups, security rules, NAT rules.</li>
+                                <li><b>Edit:</b> tags, address objects, address groups, service objects, service groups, security rules, NAT rules.</li>
+                                <li><b>No delete:</b> deleting can have a large impact, so delete by hand on the firewall.</li>
+                            </ul>
+                        </li>
+                        <li>Running and finished jobs are in <a href="/palo_alto/jobs">Job history</a>.</li>
+                        <li>Configuration jobs write to the <b>candidate config</b> only and never commit on the firewall, to keep the impact as low as possible. The admin reviews, then runs a commit check and a commit on the separate <a href="/palo_alto/commit">Commit</a> tab.</li>
+                        <li>The tool runs one job at a time.</li>
+                        <li><b>No Panorama:</b> the tool does not configure Panorama and does not support firewalls managed by Panorama, to avoid configuration conflicts.</li>
+                        <li><b>PAN-OS versions:</b> only the versions still supported on the Palo Alto PAN-OS API portal (11.1 and later, 10.2, 10.1).</li>
+                    </ul>
+                </div>
+            </details>
+
+            <details class="card fold" id="order" open>
+                <summary class="card-head"><h2>Execution order</h2></summary>
+                <div class="card-body">
+                    <ol class="steps">
+                        <li><span><b>Check the file</b> — sheet names and column names must match the template, otherwise the file is refused.</span></li>
+                        <li><span><b>Login</b> — one API key per firewall for the whole job. A firewall with a wrong password or not reachable is skipped, the rows of the other firewalls still run. Every firewall failing → refused before the job is created.</span></li>
+                        <li><span><b>One firewall after the other, each in this order:</b>
+                            <b>Read the firewall version to map the API version</b> → <b>Config lock</b> → <b>Backup of the configuration</b> (snapshot <code>Auto-&lt;date time&gt;.xml</code>) → <b>Configure every row of the file</b> → <b>Release the config lock</b> → next firewall.</span></li>
+                        <li><span><b>Order of the rows</b>: the tool runs them one by one, from top to bottom.</span></li>
+                        <li><span><b>The config is always unlocked</b> at the last step, even when the deploy fails.</span></li>
+                    </ol>
+                    <p><b>Config lock</b>: while the job runs, the tool locks the configuration of the firewall so that no other admin changes it at the same time, and releases the lock when that firewall is done. A firewall locked by another admin → nothing is written to it, the job result says so.</p>
+                </div>
+            </details>
+
+            <details class="card fold" id="templates">
+                <summary class="card-head"><h2>Template &amp; sheets</h2></summary>
+                <div class="card-body">
+                    <p><b>Use one single template file.</b></p>
+                    <div class="tpl-links">
+                        <a href="{% static 'import_template/template.xlsx' %}"><img src="{% static 'picture/excel_logo.svg' %}" alt="">template.xlsx</a>
+                    </div>
+                    <table class="t">
+                        <tr><th>Run order</th><th>Sheets (always in this order, whatever their order in the file)</th></tr>
+                        <tr><td>1. Add sheets</td><td><code>add_tag</code> → <code>add_address_object</code> → <code>add_address_group</code> → <code>add_service_object</code> → <code>add_service_group</code> → <code>add_security_rule</code> → <code>add_nat_rule</code></td></tr>
+                        <tr><td>2. Edit sheets</td><td><code>edit_tag</code> → <code>edit_address_object</code> → <code>edit_address_group</code> → <code>edit_service_object</code> → <code>edit_service_group</code> → <code>edit_security_rule</code> → <code>edit_nat_rule</code></td></tr>
+                    </table>
+                    <p><b>Note:</b></p>
+                    <ul>
+                        <li>The import file contains only the sheets you need. Delete every other sheet from the file (an empty sheet left in the file → the whole file is refused). Example: add an address and put it in an existing rule → the file has only <code>add_address_object</code> and <code>edit_security_rule</code>.</li>
+                        <li>Inside a sheet, the tool configures the rows one by one from top to bottom, in the order you put them.</li>
+                        <li>Several vsys of the same firewall can be configured (shared included).</li>
+                        <li>Header colour: red = required, yellow = required in some cases, green = optional.</li>
+                        <li>Row 2 of every sheet is an example row: replace it or delete it before the upload.</li>
+                        <li>Plain values only, no Excel formula. A cell with invisible characters or an Excel error is refused with its position.</li>
+                        <li>Lists are comma separated, without an extra comma or a repeated name.</li>
+                        <li>Edit sheets: the tool reads the current configuration on the firewall and changes only what the file fills; everything else is kept. No rename, no move to another vsys.</li>
+                        <li>Edit object sheets (edit_tag, edit_address_object, edit_service_object): the tool replaces the whole value with the new one (no Edit-*-mode column), empty cell = kept, <code>none</code> = clear.</li>
+                        <li>Edit rule and group sheets: every column has its mode column <code>Edit-&lt;Column&gt;-mode</code>: <code>add</code> (add to the list), <code>remove</code> (remove from the list), <code>replace</code> (new value / full list, <code>none</code> = clear), <code>remain</code> or empty (kept). Details in each sheet.</li>
+                    </ul>
+                    <p><b>Shared</b> (object, group, service, tag sheets): <code>Vsys</code> = <code>shared</code> puts the object in shared, where every vsys of the firewall can use it. Notes:</p>
+                    <ul>
+                        <li>A shared group / the tags of a shared object can only use shared objects / tags.</li>
+                        <li>A rule is always in a vsys: <code>shared</code> on a rule sheet → the file is refused.</li>
+                        <li>A vsys object cannot have the name of a shared object (<code>... already exists in shared</code>); same value → <code>Warning: Duplicate Value with X (shared)</code>.</li>
+                        <li>Edit sheets edit shared entries too (<code>Vsys</code> = <code>shared</code>).</li>
+                    </ul>
+                </div>
+            </details>
+
+            {% include 'pages/guide_sheets.html' %}
+
+            <details class="card fold" id="dryrun">
+                <summary class="card-head"><h2>Dry-run</h2></summary>
+                <div class="card-body">
+                    <p><b>Dry-run</b> only gets information from the firewall, writes nothing, and reports the result of every row in advance: <code>CAN CREATE</code> / <code>CAN EDIT</code> / <code>CAN MOVE</code> or an error. It checks that the values of the admin's file have the right format and can really be configured on the firewall.</p>
+                    <p>The Dry-run covers most cases before the Install, but not 100% (e.g. interfaces and source users are not checked).</p>
+                    <p>So always run a Dry-run first to reduce input errors. The admin then reviews the result and runs the Install.</p>
+                </div>
+            </details>
+
+            <details class="card fold" id="duplicate">
+                <summary class="card-head"><h2>Stop duplicated</h2></summary>
+                <div class="card-body">
+                    <p><b>Stop duplicated</b> (Install only) avoids creating a new object / rule with the same value as an old object / rule already on the firewall. Its only purpose is to create fewer useless objects / rules.</p>
+                    <ul>
+                        <li><b>Ticked:</b> a row with a duplicate value is skipped, not created. The other rows run as usual.</li>
+                        <li><b>Not ticked:</b> the duplicate row is still created, with a duplicate warning in the result.</li>
+                    </ul>
+                    <p>The Dry-run always checks these duplicate values and warns about objects / rules that have the same value as the ones to create.</p>
+                </div>
+            </details>
+
+            <details class="card fold" id="commit">
+                <summary class="card-head"><h2>Commit check &amp; Commit</h2></summary>
+                <div class="card-body">
+                    <p><b>Purpose:</b> template jobs only write to the candidate config and never commit. After a job, an administrator reviews the result and the configuration on the firewall, then decides to run a commit check or a commit. Changes take effect only under the control and approval of an administrator, which reduces the risk of applying a wrong configuration.</p>
+                    <p>Done on the <a href="/palo_alto/commit">Commit</a> page, separate from the templates. Enter firewall IPs (single, range <code>a-b</code>, CIDR), username and password.</p>
+                    <ul>
+                        <li><b>Commit check</b>: validate only, nothing applied. Run it first and review the result per firewall.</li>
+                        <li><b>Commit</b>: apply the candidate config.</li>
+                        <li>Scope, for both Commit check and Commit (must be chosen, no default): <i>changes of this user only</i> (partial) or <i>all changes</i>.</li>
+                        <li>Up to 5 firewalls in parallel. Firewalls without pending changes are skipped.</li>
+                    </ul>
+                </div>
+            </details>
+
+        </div>
+    </div>

@@ -1,0 +1,29 @@
+{% extends 'pages/base.html' %}
+{% block title %}About · Automation Tool{% endblock %}
+{% block nav_about %}active{% endblock %}
+
+{% block style %}
+    .hero { padding: 28px; display: grid; grid-template-columns: 1.5fr 1fr; gap: 24px; align-items: center; }
+    @media (max-width: 860px) { .hero { grid-template-columns: 1fr; } }
+    .hero h1 { font-size: 26px; margin: 0 0 8px; }
+    .hero p { margin: 0 0 16px; color: var(--muted); font-size: 15px; }
+    .hero-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .hero-art { display: grid; place-items: center; color: var(--primary); }
+    .guides { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px 20px; }
+    @media (max-width: 640px) { .guides { grid-template-columns: 1fr; } }
+    .guide-link { display: block; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); }
+    .guide-link:hover { border-color: var(--primary); text-decoration: none; }
+    .guide-link b { display: block; margin-bottom: 4px; }
+    .guide-link span { color: var(--muted); font-size: 13px; }
+    .card + .card { margin-top: 20px; }
+    .hero p.version { font-family: var(--mono); font-size: 13px; margin: -8px 0 16px; }
+    .lang-bar { display: flex; gap: 8px; justify-content: flex-end; margin-bottom: 12px; }
+{% endblock %}
+
+{% block content %}
+    <div class="lang-bar">
+        <a href="?lang=en" class="btn btn-sm {% if lang == 'vi' %}btn-ghost{% else %}btn-primary{% endif %}">English</a>
+        <a href="?lang=vi" class="btn btn-sm {% if lang == 'vi' %}btn-primary{% else %}btn-ghost{% endif %}">Tiếng Việt</a>
+    </div>
+    {% if lang == 'vi' %}{% include 'pages/about_vi.html' %}{% else %}{% include 'pages/about_en.html' %}{% endif %}
+{% endblock %}

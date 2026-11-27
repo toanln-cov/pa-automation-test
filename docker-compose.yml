@@ -1,0 +1,65 @@
+services:
+  # one-shot, runs before the tool: owner of ./data and ./jobs = www-data (uid 33) so the tool runs without root.
+  # Only CHOWN / DAC_OVERRIDE / FOWNER, no network, read-only, then exits.
+  pa-automation-init:
+    image: pa-automation:latest
+    build: .
+    user: '0'
+    entrypoint: ['sh', '-c', 'chown -R 33:33 /data /jobs && chmod 700 /data /jobs']
+    restart: 'no'
+    network_mode: none
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
+    volumes:
+      - ./data:/data
+      - ${PA_JOBS_DIR:-./jobs}:/jobs
+
+  pa-automation:
+    image: pa-automation:latest
+    container_name: pa-automation
+    restart: unless-stopped
+    depends_on:
+      pa-automation-init:
+        condition: service_completed_successfully
+    user: '33:33'                     # www-data, never root (also set in Dockerfile)
+    ports:
+      - '9198:8443'                   # change the left number if 9198 is already used
+    # every setting has a default (unset or empty = default); a value that is set but invalid stops the container
+    # with a message naming the variable (see the container log)
+    environment:
+      APP_DEBUG: '0'                  # 1 = Django debug page (never in production)
+      APP_ALLOWED_HOSTS: '*'          # comma separated host names / IPs allowed to access, e.g. 10.0.0.5,pa-auto.local
+      APP_TZ_OFFSET_HOURS: '7'        # timezone offset for job time display (GMT+7)
+      APP_CERT_CN: 'pa-automation'    # CN of the auto-generated self-signed certificate
+      APP_LOGIN_FAILURE_LIMIT: '5'    # failed web logins before lock (per username + IP)
+      APP_LOGIN_COOLOFF_MINUTES: '15' # lock duration in minutes
+      APP_HSTS_SECONDS: '0'           # HSTS max-age, 0 = off; set 31536000 only after installing a trusted certificate
+      APP_PANOS_CA_BUNDLE: ''         # CA bundle path inside the container to verify firewall certificates (empty = not verified)
+      APP_MIN_FREE_DISK_MB: '100'     # new jobs are refused when the disk of ./jobs has less free space (MB)
+      APP_JOB_MAX_SIZE_MB: '1024'     # above this size of job results the oldest jobs are deleted, 0 = no limit
+    security_opt:
+      - no-new-privileges:true        # no privilege gain through setuid binaries inside the container
+    # no Linux capability at all (non-root, port 8443). Network checks to the firewalls: curl, nc, dig, traceroute (no ping /
+    # tcpdump: they need NET_RAW, and ICMP does not leave rootless Docker by default - INFRA-15)
+    cap_drop: [ALL]
+    # NOT used on purpose (each one = easy container escape): privileged, docker.sock mount, host network/pid/ipc,
+    # seccomp/apparmor unconfined. Docker default seccomp + AppArmor profiles stay active
+    # root filesystem read-only: code / config cannot be changed at run time; writable: volumes + these tmpfs
+    read_only: true
+    tmpfs:
+      - /run:size=16m,uid=33,gid=33,mode=0755    # Apache pid, mod_wsgi socket, SSL session cache
+      - /tmp:size=64m,mode=1777                  # uploaded file while it is read (max 10 MB)
+      - /var/log/apache2:size=16m,uid=33,gid=33,mode=0755
+    # log rotation of the container output (audit log is here: keep it, forward to syslog/SIEM for long retention)
+    logging:
+      driver: json-file
+      options:
+        max-size: '100m'                   # 10 x 100 MB = about 1 GB (user decision 2026-11-26)
+        max-file: '10'
+    volumes:
+      - ./data:/var/www/html/data     # SSL cert, secret key, web login DB
+      # job results: ./jobs by default; on a larger disk: PA_JOBS_DIR=/path/on/large/disk in a .env file next to this file
+      - ${PA_JOBS_DIR:-./jobs}:/var/www/html/jobs

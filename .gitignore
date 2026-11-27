@@ -1,0 +1,30 @@
+# local only (never in the repo): lab settings and secrets (_private/), tests (test plan, fixtures, tools, run results),
+# internal development log (CHANGELOG.md)
+local_only/
+*.env
+
+# runtime data (created by the container)
+data/
+jobs/
+
+# python / os / editors (workstation junk)
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.log
+.DS_Store
+.idea/
+.vscode/
+*.swp
+~$*
+
+# workstation settings: local only
+CLAUDE.local.md
+.claude/
+
+
+# secrets: tokens, keys, certificates
+*token*.txt
+*.pem
+*.key

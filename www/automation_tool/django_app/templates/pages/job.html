@@ -1,0 +1,256 @@
+{% extends 'pages/base.html' %}
+{% block title %}Job {{ job.id }}{% endblock %}
+{% block nav_jobs %}active{% endblock %}
+
+{% block style %}
+    .meta { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; }
+    .meta div span { display: block; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+    .meta div b { font-weight: 600; word-break: break-all; }
+
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 20px 0; }
+    @media (max-width: 640px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+    .stats .card + .card { margin-top: 0; }      /* base.html spaces stacked cards, not cards side by side */
+    .stat { padding: 14px 16px; }
+    .stat .n { font-size: 26px; font-weight: 700; line-height: 1.1; }
+    .stat .l { color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+    .stat.ok .n { color: var(--ok); } .stat.warn .n { color: var(--warn); } .stat.fail .n { color: var(--fail); }
+
+    .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+    .toolbar .current { margin-left: auto; color: var(--info); font-weight: 600; }
+
+    details.section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 12px; overflow: hidden; }
+    details.section > summary {
+        list-style: none; cursor: pointer; padding: 12px 16px; display: flex; align-items: center; gap: 10px; font-weight: 600;
+    }
+    details.section > summary::-webkit-details-marker { display: none; }
+    details.section > summary::before { content: "\25B8"; color: var(--muted); transition: transform .12s; }
+    details.section[open] > summary::before { transform: rotate(90deg); }
+    /* 1 box per firewall: its steps (version, lock, backup, sheets, unlock) inside, the whole box collapses */
+    details.fw { border: 1px solid var(--border); border-left: 4px solid var(--info); border-radius: var(--radius); background: var(--surface-2); margin-bottom: 16px; }
+    details.fw > summary {
+        list-style: none; cursor: pointer; padding: 12px 16px; display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px;
+    }
+    details.fw > summary::-webkit-details-marker { display: none; }
+    details.fw > summary::before { content: "\25B8"; color: var(--muted); transition: transform .12s; }
+    details.fw[open] > summary::before { transform: rotate(90deg); }
+    details.fw > summary .steps { color: var(--muted); font-weight: 500; font-size: 12px; }
+    .fw-body { padding: 0 12px 4px 28px; }
+    .fw-body details.section { margin-bottom: 10px; }
+    .chips { margin-left: auto; display: flex; gap: 6px; }
+    .chip { font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 999px; }
+    .chip.ok { background: var(--ok-soft); color: var(--ok); }
+    .chip.warn { background: var(--warn-soft); color: var(--warn); }
+    .chip.fail { background: var(--fail-soft); color: var(--fail); }
+    .chip.info { background: var(--surface-2); color: var(--muted); }
+
+    .lines { border-top: 1px solid var(--border); font-family: var(--mono); font-size: 12.5px; }
+    .line { padding: 6px 16px 6px 13px; border-left: 3px solid transparent; white-space: pre-wrap; word-break: break-word; }
+    .line + .line { border-top: 1px solid var(--border); }
+    .line.ok { border-left-color: var(--ok); }
+    .line.warn { border-left-color: var(--warn); background: var(--warn-soft); }
+    .line.fail { border-left-color: var(--fail); background: var(--fail-soft); }
+    .line.info { border-left-color: var(--border); color: var(--muted); }
+    .line .ts { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-right: 10px; white-space: nowrap; }
+    .empty { padding: 12px 16px; color: var(--muted); border-top: 1px solid var(--border); font-style: italic; }
+    pre.error { margin: 0; padding: 14px 16px; font-family: var(--mono); font-size: 12px; white-space: pre-wrap; }
+{% endblock %}
+
+{% block content %}
+    <div class="page-head">
+        <div>
+            <h1>Job <span class="mono">{{ job.id }}</span></h1>
+            <p>Result per Excel row. This page refreshes automatically while the job is running.</p>
+        </div>
+        <span id="status" class="badge {{ job.badge }}">{{ job.badge_text }}</span>
+    </div>
+
+    <div class="card">
+        <div class="card-body meta">
+            <div><span>Started</span><b>{{ job.started }}</b></div>
+            <div><span>Finished</span><b id="finished">{{ job.finished|default:"—" }}</b></div>
+            <div><span>{% if job.mode == 'validate' or job.mode == 'commit' %}Firewalls{% else %}Excel file{% endif %}</span><b>{{ job.filename }}</b></div>
+            <div><span>Submitted by</span><b>{{ job.submitted_by|default:"—" }}</b></div>
+            <div><span>Firewall user</span><b>{{ job.username }}</b></div>
+            <div><span>Mode</span><b>{% if job.mode == 'dry-run' %}Dry-run only{% elif job.mode == 'validate' %}Commit check{% elif job.mode == 'commit' %}Commit{% elif job.dry_run_first %}Install (dry-run first){% else %}Install{% endif %}{% if job.operation %} &middot; {{ job.operation|capfirst }}{% endif %}</b></div>
+            {% if job.mode == 'validate' or job.mode == 'commit' %}
+            <div><span>Scope</span><b>{% if job.scope == 'full' %}All changes{% else %}Changes of {{ job.username }}{% endif %}</b></div>
+            <div><span>Description</span><b>{{ job.description|default:"—" }}</b></div>
+            {% elif job.mode == 'install' %}
+            <div><span>Stop duplicated</span><b>{{ job.stop_duplicate|yesno:"Yes,No" }}</b></div>
+            {% endif %}
+            <div><span>Timezone</span><b>{{ tz_label }}</b></div>
+        </div>
+    </div>
+
+    {% if job.status == 'interrupted' and job.mode == 'install' %}
+    <div class="alert alert-fail u-mt20">The job was interrupted (container restarted?). A <b>config lock may still be held</b> on the firewall &mdash; check and remove it manually on the firewall.</div>
+    {% endif %}
+    {% if job.mode == 'install' %}
+    <div class="alert alert-info u-mt20">Changes are written to the <b>candidate config</b> only. Review and <b>commit on the firewall</b> to apply them.</div>
+    {% endif %}
+
+    <div class="stats">
+        <div class="card stat"><div class="n" id="n-total">0</div><div class="l">Rows</div></div>
+        <div class="card stat ok"><div class="n" id="n-ok">0</div><div class="l">Success</div></div>
+        <div class="card stat warn"><div class="n" id="n-warn">0</div><div class="l">Warning / skipped</div></div>
+        <div class="card stat fail"><div class="n" id="n-fail">0</div><div class="l">Failed / skipped</div></div>
+    </div>
+
+    <div class="toolbar">
+        <label class="btn btn-ghost btn-sm"><input class="u-m0 u-accent" type="checkbox" id="only-issues"> Only warnings &amp; failures</label>
+        <button class="btn btn-ghost btn-sm" type="button" id="expand">Expand all</button>
+        <button class="btn btn-ghost btn-sm" type="button" id="collapse">Collapse all</button>
+        <span class="current" id="current"></span>
+    </div>
+
+    <div id="result"></div>
+    <div class="card u-hidden" id="error-card">
+        <div class="card-head u-fail">Errors</div>
+        <pre class="error" id="error"></pre>
+    </div>
+{% endblock %}
+
+{% block script %}
+<script nonce="{{ csp_nonce }}">
+    // incremental: fetch only new result lines (?since=N), append them; counters computed by the server
+    // render with textContent only (no HTML injection from rule/object name or firewall message)
+    const statusUrl = '/palo_alto/job/{{ job.id }}/status';
+    const INFO = ['Firewall version', 'Backup State', 'Dry-run check', 'Config lock', 'Config unlock'];
+    const kind = t => t.includes(' · ') ? t.slice(t.indexOf(' · ') + 3) : t;   // '<firewall> · <kind>' -> '<kind>' (same as job_runner.section_kind)
+    const CAP = 200;                       // lines shown per section until "Show all"
+    let received = 0;                      // number of result lines already received
+    const sections = [];                   // {title, lines: [[text, time]], el, list, more, open, showAll, fw}
+    const firewalls = {};                  // firewall -> {el, body, name, chips, sections: [index]}: 1 box per firewall
+    const firewallOf = t => t.includes(' · ') ? t.slice(0, t.indexOf(' · ')) : '';
+    let onlyIssues = false;
+
+    function classify(title, line) {       // same rules as job_runner.classify()
+        if (INFO.includes(kind(title))) return line.includes('cannot lock') || line.includes('NOT released') || line.includes('backup FAILED') ? 'fail' : 'info';
+        if (line.includes('SKIPPED')) return 'warn';
+        if (line.includes('=> command succeeded') || line.includes('=> CAN ') || line.includes('=> WOULD ')) return line.toLowerCase().includes('warning') || line.toLowerCase().includes('failed') ? 'warn' : 'ok';
+        return 'fail';
+    }
+    function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+
+    function ensureSection(i, title) {
+        while (sections.length <= i) {
+            const idx = sections.length, sec = { title: '', lines: [], open: true, showAll: false };
+            sec.el = el('details', 'section'); sec.el.open = true;
+            sec.el.addEventListener('toggle', () => { sec.open = sec.el.open; });
+            sec.summary = el('summary'); sec.name = el('span'); sec.chips = el('span', 'chips');
+            sec.summary.append(sec.name, sec.chips);
+            sec.list = el('div', 'lines'); sec.more = el('button', 'btn btn-ghost btn-sm'); sec.more.type = 'button';
+            sec.more.style.margin = '8px 16px'; sec.more.style.display = 'none';
+            sec.more.addEventListener('click', () => { sec.showAll = true; renderSection(sec); });
+            sec.el.append(sec.summary, sec.list, sec.more);
+            sections.push(sec);
+        }
+        const sec = sections[i];
+        if (title !== undefined && !sec.el.parentNode) {      // placed once its title is known: in the box of its firewall
+            const fw = firewallOf(title);
+            sec.fw = fw;
+            (fw ? firewallBox(fw) : { body: document.getElementById('result') }).body.appendChild(sec.el);
+            if (fw) firewalls[fw].sections.push(i);
+        }
+        if (title !== undefined) { sec.title = title; sec.name.textContent = sec.fw ? kind(title) : title; }
+        return sec;
+    }
+
+    function firewallBox(fw) {
+        if (!firewalls[fw]) {
+            const box = { el: el('details', 'fw'), summary: el('summary'), name: el('span', 'mono', fw), steps: el('span', 'steps'),
+                          chips: el('span', 'chips'), body: el('div', 'fw-body'), sections: [] };
+            box.el.open = true;
+            box.summary.append(box.name, box.steps, box.chips);
+            box.el.append(box.summary, box.body);
+            document.getElementById('result').appendChild(box.el);
+            firewalls[fw] = box;
+        }
+        return firewalls[fw];
+    }
+
+    // firewall box header: number of steps + rows ok / warning / failed of all its sheets, problem of lock / backup / API key
+    function renderFirewall(box, counts) {
+        const c = { ok: 0, warn: 0, fail: 0 };
+        let problem = false;
+        for (const i of box.sections) {
+            const n = counts[i] || {};
+            if (INFO.includes(kind(sections[i].title))) { problem = problem || !!n.fail; continue; }
+            c.ok += n.ok || 0; c.warn += (n.warn || 0) + (n.skip || 0); c.fail += n.fail || 0;
+        }
+        box.steps.textContent = box.sections.length + ' step' + (box.sections.length > 1 ? 's' : '');
+        box.chips.textContent = '';
+        if (problem) box.chips.appendChild(el('span', 'chip fail', 'problem'));
+        if (c.ok) box.chips.appendChild(el('span', 'chip ok', c.ok + ' ok'));
+        if (c.warn) box.chips.appendChild(el('span', 'chip warn', c.warn + ' warning'));
+        if (c.fail) box.chips.appendChild(el('span', 'chip fail', c.fail + ' failed'));
+    }
+
+    // draw the lines of 1 section: last CAP lines (or all), or only warnings/failures when filtered
+    function renderSection(sec) {
+        let lines = sec.lines.map(([l, t]) => [classify(sec.title, l), l, t]);
+        if (onlyIssues) lines = lines.filter(([k]) => k === 'warn' || k === 'fail');
+        const hidden = (!sec.showAll && !onlyIssues && lines.length > CAP) ? lines.length - CAP : 0;
+        sec.list.textContent = '';
+        if (!lines.length) sec.list.appendChild(el('div', 'empty', running ? 'Processing…' : 'No row.'));
+        for (const [k, l, t] of lines.slice(hidden)) {
+            const row = el('div', 'line ' + k);
+            if (t) row.appendChild(el('span', 'ts', t));          // date and time of the line
+            row.appendChild(document.createTextNode(l));
+            sec.list.appendChild(row);
+        }
+        sec.more.style.display = hidden ? '' : 'none';
+        sec.more.textContent = 'Show all (' + lines.length + ' lines, ' + hidden + ' hidden)';
+        sec.el.style.display = (onlyIssues && !lines.length && !INFO.includes(kind(sec.title))) ? 'none' : '';
+    }
+
+    function renderChips(sec, c) {
+        sec.chips.textContent = '';
+        const k = kind(sec.title);
+        if (k === 'Backup State') sec.chips.appendChild(c.fail ? el('span', 'chip fail', 'failed') : el('span', 'chip info', c.info + ' device'));
+        else if (k === 'Firewall version') sec.chips.appendChild(el('span', 'chip info', c.info + ' device'));
+        else if (k === 'Config lock' || k === 'Config unlock') sec.chips.appendChild(el('span', c.fail ? 'chip fail' : 'chip ok', c.fail ? 'problem' : 'ok'));
+        else if (k === 'Dry-run check') sec.chips.appendChild(el('span', jobStatus === 'blocked' ? 'chip fail' : 'chip ok', jobStatus === 'blocked' ? 'blocked' : 'passed'));
+        else {
+            if (c.ok) sec.chips.appendChild(el('span', 'chip ok', c.ok + ' ok'));
+            if (c.warn + c.skip) sec.chips.appendChild(el('span', 'chip warn', (c.warn + c.skip) + ' warning'));
+            if (c.fail) sec.chips.appendChild(el('span', 'chip fail', c.fail + ' failed'));
+        }
+    }
+
+    let running = true, jobStatus = '{{ job.status }}';
+    function apply(job) {
+        jobStatus = job.status; running = job.status === 'running';
+        const st = document.getElementById('status'); st.textContent = job.badge_text; st.className = 'badge ' + job.badge;
+        document.getElementById('finished').textContent = job.finished || '—';
+        document.getElementById('current').textContent = running && job.current ? 'Processing: ' + job.current + ' …' : '';
+        job.sections.forEach((s, i) => ensureSection(i, s.title));
+        const touched = new Set();
+        for (const [i, line, time] of job.lines) { ensureSection(i).lines.push([line, time]); touched.add(i); }
+        received = job.line_count;
+        job.sections.forEach((s, i) => { renderChips(sections[i], job.section_counts[i]); if (touched.has(i) || !running) renderSection(sections[i]); });
+        Object.values(firewalls).forEach(box => renderFirewall(box, job.section_counts));
+        const t = job.total;
+        document.getElementById('n-total').textContent = t.rows;
+        document.getElementById('n-ok').textContent = t.ok;
+        document.getElementById('n-warn').textContent = t.warn + t.skip;
+        document.getElementById('n-fail').textContent = t.fail;
+        document.getElementById('error').textContent = job.error || '';
+        document.getElementById('error-card').classList.toggle('u-hidden', !job.error);
+        return running;
+    }
+    function poll() {
+        fetch(statusUrl + '?since=' + received).then(r => {
+            if (r.redirected) { location.reload(); throw new Error('session expired'); }   // redirected to login page
+            return r.json();
+        }).then(job => {
+            if (apply(job)) setTimeout(poll, 2000);
+        }).catch(() => setTimeout(poll, 5000));
+    }
+    document.getElementById('only-issues').addEventListener('change', e => { onlyIssues = e.target.checked; sections.forEach(renderSection); });
+    const boxes = () => sections.map(s => s.el).concat(Object.values(firewalls).map(b => b.el));
+    document.getElementById('expand').addEventListener('click', () => boxes().forEach(e => { e.open = true; }));
+    document.getElementById('collapse').addEventListener('click', () => boxes().forEach(e => { e.open = false; }));
+    poll();
+</script>
+{% endblock %}

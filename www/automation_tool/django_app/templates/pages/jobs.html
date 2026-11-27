@@ -1,0 +1,68 @@
+{% extends 'pages/base.html' %}
+{% block title %}Job history{% endblock %}
+{% block nav_jobs %}active{% endblock %}
+
+{% block style %}
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 16px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: var(--surface-2); font-weight: 700; }
+    tbody tr:hover { background: var(--surface-2); }
+    tbody tr:last-child td { border-bottom: 0; }
+    td.file { white-space: normal; word-break: break-all; max-width: 280px; }
+    .num-ok { color: var(--ok); font-weight: 700; }
+    .num-fail { color: var(--fail); font-weight: 700; }
+    .empty-state { padding: 48px 16px; text-align: center; color: var(--muted); }
+    .page-head p.storage { font-size: 13px; margin-top: 4px; }
+    .alert-warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+{% endblock %}
+
+{% block content %}
+    <div class="page-head">
+        <div>
+            <h1>Job history</h1>
+            <p>All configuration jobs, newest first. Times in {{ tz_label }}.</p>
+            <p class="storage">{{ storage.count }} job{{ storage.count|pluralize }} stored, {{ storage.size_mb }} MB{% if storage.free_mb is not None %} &middot; free disk {{ storage.free_mb }} MB{% endif %} &middot; {% if storage.max_mb %}above {{ storage.max_mb }} MB the oldest jobs are deleted automatically{% else %}jobs are kept forever{% endif %}</p>
+        </div>
+        <a class="btn btn-primary" href="/palo_alto/">New job</a>
+    </div>
+
+    {% if storage.low %}
+    <div class="alert alert-warn">Disk almost full: {{ storage.free_mb }} MB free. New jobs are refused below {{ storage.min_free_mb }} MB. Ask the administrator to free disk space or move the job folder to a larger disk (README).</div>
+    {% endif %}
+
+    {% if running_job %}
+    <div class="alert alert-info">A job is running: <a href="/palo_alto/job/{{ running_job }}" class="mono">{{ running_job }}</a></div>
+    {% endif %}
+
+    <div class="card">
+    {% if jobs %}
+        <div class="table-wrap">
+        <table>
+            <thead>
+                <tr><th>Job</th><th>Status</th><th>Started</th><th>Finished</th><th>Mode</th><th>File / firewalls</th><th>Submitted by</th><th>Firewall user</th><th>Success</th><th>Skipped</th><th>Fail</th></tr>
+            </thead>
+            <tbody>
+            {% for job in jobs %}
+                <tr>
+                    <td><a class="mono" href="/palo_alto/job/{{ job.id }}">{{ job.id }}</a></td>
+                    <td><span class="badge {{ job.badge }}">{{ job.badge_text }}</span></td>
+                    <td>{{ job.started }}</td>
+                    <td>{{ job.finished|default:"—" }}</td>
+                    <td>{% if job.mode == 'dry-run' %}Dry-run{% elif job.mode == 'validate' %}Commit check{% elif job.mode == 'commit' %}Commit{% elif job.dry_run_first %}Install + dry-run{% else %}Install{% endif %}{% if job.operation %} &middot; {{ job.operation|capfirst }}{% endif %}</td>
+                    <td class="file">{{ job.filename }}</td>
+                    <td>{{ job.submitted_by|default:"—" }}</td>
+                    <td>{{ job.username }}</td>
+                    <td class="num-ok">{{ job.ok|default_if_none:"" }}</td>
+                    <td>{{ job.skip|default_if_none:"" }}</td>
+                    <td class="{% if job.fail %}num-fail{% endif %}">{{ job.fail|default_if_none:"" }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    {% else %}
+        <div class="empty-state">No job yet. <a href="/palo_alto/">Start the first one</a>.</div>
+    {% endif %}
+    </div>
+{% endblock %}

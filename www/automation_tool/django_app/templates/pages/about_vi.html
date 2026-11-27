@@ -1,0 +1,27 @@
+    <div class="card hero">
+        <div>
+            <h1>Firewall Automation Tool</h1>
+            <p>Tool hỗ trợ cấu hình firewall Palo Alto Networks.</p>
+            <p class="version">Phiên bản {{ app_version }}</p>
+            <div class="hero-actions">
+                <a class="btn btn-primary" href="/palo_alto/guide?lang=vi">Đọc hướng dẫn</a>
+                {% if user.is_authenticated %}<a class="btn btn-ghost" href="/palo_alto/">Mở trang Configure</a>{% else %}<a class="btn btn-ghost" href="/login/">Đăng nhập</a>{% endif %}
+            </div>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+            <svg width="150" height="120" viewBox="0 0 150 120" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="6" y="20" width="44" height="56" rx="4"/><path d="M16 34h24M16 46h24M16 58h16"/>
+                <path d="M58 48h22M72 40l8 8-8 8"/>
+                <rect x="90" y="14" width="54" height="22" rx="3"/><rect x="90" y="48" width="54" height="22" rx="3"/><rect x="90" y="82" width="54" height="22" rx="3"/>
+                <circle cx="100" cy="25" r="2"/><circle cx="100" cy="59" r="2"/><circle cx="100" cy="93" r="2"/>
+            </svg>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-head">Hướng dẫn</div>
+        <div class="guides">
+            <a class="guide-link" href="/palo_alto/guide?lang=en"><b>English</b><span>Templates &amp; job types, execution order, dry-run, stop duplicated, commit, rule position, template rules.</span></a>
+            <a class="guide-link" href="/palo_alto/guide?lang=vi"><b>Tiếng Việt</b><span>Template &amp; loại job, thứ tự thực thi, dry-run, stop duplicated, commit, vị trí rule, quy tắc template.</span></a>
+        </div>
+    </div>

@@ -1,0 +1,37 @@
+{% extends 'pages/base.html' %}
+{% block title %}Sign in · Automation Tool{% endblock %}
+
+{% block style %}
+    .login-wrap { min-height: calc(100vh - 200px); display: grid; place-items: center; }
+    .login { width: 100%; max-width: 380px; }
+    .login .card-body { padding: 24px; }
+    .login h1 { font-size: 20px; margin: 0 0 4px; }
+    .login p { margin: 0 0 20px; color: var(--muted); }
+{% endblock %}
+
+{% block content %}
+<div class="login-wrap">
+    <form class="card login" method="post" action="/login/">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ next }}">
+        <div class="card-body">
+            <h1>Sign in</h1>
+            <p>Web account of Automation Tool (not the firewall account).</p>
+
+            {% if form.errors %}
+            <div class="alert alert-fail">Wrong username or password.</div>
+            {% endif %}
+
+            <div class="field">
+                <label class="lbl" for="id_username">Username</label>
+                <input type="text" name="username" id="id_username" autocomplete="username" autofocus required>
+            </div>
+            <div class="field">
+                <label class="lbl" for="id_password">Password</label>
+                <input type="password" name="password" id="id_password" autocomplete="current-password" required>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block">Sign in</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
