@@ -172,19 +172,18 @@ def _palo_alto_upload(request):
                         found.append(f"{sheet} row {r['_row']}")
             return found
 
-        #vsys not on the firewall: nothing written to it
+        #vsys not on the firewall, shared on a firewall without shared: nothing written to it
         #vsys list unreadable: firewall refuses the lock anyway
         def vsys_error(ip):
             fw = PA_tool.palib.api(ip, dict_device_token[ip])
             known = PA_tool.DryRunContext().names('vsys', ip, dict_device_token[ip], {'location': 'vsys', '@vsys': 'firewall'})
-            if known is None:
-                return ''
-            known = known or {fw.DEFAULT_VSYS}
-            missing = [v for v in vsys_of[ip] if v != fw.SHARED_NAME and v not in known]
+            shown_known = ', '.join(sorted(known or {fw.DEFAULT_VSYS})) if known is not None else '?'
+            missing = [v for v in vsys_of[ip] if (v == fw.SHARED_NAME and not fw.has_shared())
+                       or (v != fw.SHARED_NAME and known is not None and v not in (known or {fw.DEFAULT_VSYS}))]
             if not missing:
                 return ''
             return 'vsys not found on this firewall: ' + '; '.join(f"'{v}' ({', '.join(rows_in_vsys(ip, v)[:10])})" for v in missing) + \
-                   f" (firewall vsys: {', '.join(sorted(known))})"
+                   f" (firewall vsys: {shown_known}" + ('' if fw.has_shared() else '; no shared') + ')'
 
         #lock every vsys or nothing, release locks already taken
         def lock_step(ip):

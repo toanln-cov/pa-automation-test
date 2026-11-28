@@ -63,6 +63,8 @@ def connect(host, token):
     if not re.match(r'\d+\.\d+', sw):
         raise FirewallError(f'unknown PAN-OS version {sw[:40]!r}')
     api = select_class(sw)(host, token, sw, session)
+    api.multi_vsys = {'on': True, 'off': False}.get(str(rs['result']['system'].get('multi-vsys', '')).strip().lower())
+    api.has_shared()
     with _lock:
         old = APIS.get(host)
         APIS[host] = api

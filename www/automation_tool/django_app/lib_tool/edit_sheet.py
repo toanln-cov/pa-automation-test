@@ -3,7 +3,7 @@ import copy
 from . import palo_alto_api_lib as palib
 from .PA_tool import (read_sheet, sheet_rows, row_label, shown, row_errors, cached_list, row_location, check_position,
                       move_rule_to_position, move_text, DryRunContext, get_unique_device_and_token, allows_all, ALLOWS_ALL,
-                      is_shared, rules_before, group_cycle, GROUP_MEMBERS, vsys_label, nat_wildcard_sources, note_wildcard, nat_static_fqdn, bare_ip_warnings)
+                      is_shared, no_shared, rules_before, group_cycle, GROUP_MEMBERS, vsys_label, nat_wildcard_sources, note_wildcard, nat_static_fqdn, bare_ip_warnings)
 from .panos import fields
 
 MODE_KINDS = ('address_group', 'service_group', 'security_rule', 'nat_rule')
@@ -199,6 +199,12 @@ def automatic_edit(kind,username,password,input_excel_file_path,sheet,location_o
         check = {'status': True, 'msg': ''}
         warnings = []
         result = row_label(row) + 'Device-IP: ' + str(row['Device-ip']) + ' (' + vsys_label(fw, row, loc) + f') | {text}: ' + shown(row.get('Name')) + ' => '
+        if no_shared(fw, loc):
+            result += fw.no_shared_error()
+            final_result += result + '\n'
+            if log:
+                log(result)
+            continue
 
         holder = {'entry': {}}
         if kind == 'tag':

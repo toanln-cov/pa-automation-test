@@ -133,6 +133,9 @@ class PanOS11_1:
         self.token = token
         self.sw_version = sw_version
         self.session = session                       # one HTTPS session per firewall, TLS reused
+        self.multi_vsys = None                       # show system info multi-vsys: True / False, None = not read
+        self.shared = None                           # shared confirmed by REST: True / False, None = not asked / no clear answer
+        self.shared_tries = 0
 
     # --- firewall answers: REST
     def is_success(self, rs):
@@ -1210,6 +1213,31 @@ class PanOS11_1:
 
     def shared_location(self):
         return {'location': 'shared', '@vsys': self.SHARED_NAME}
+
+    #shared confirmed on the firewall, asked once and kept for the job
+    #  REST read of shared tags: success -> shared, firewall refuses location=shared -> no shared
+    #  no clear answer (timeout, rights...) twice -> multi-vsys field of show system info (off -> no shared)
+    SHARED_TRIES = 2
+
+    def has_shared(self):
+        while self.shared is None and self.shared_tries < self.SHARED_TRIES:
+            self.shared_tries += 1
+            self.shared = self.read_shared()
+        return self.shared if self.shared is not None else self.multi_vsys is not False
+
+    def read_shared(self):
+        try:
+            rs = self.rest_get('/Objects/Tags', self.shared_location()).json()
+        except Exception:
+            return None
+        if isinstance(rs, dict) and rs.get('@status') == 'success':
+            return True
+        if isinstance(rs, dict) and str(rs.get('code')) == '3' and 'location=shared' in self.error_text(rs):
+            return False
+        return None
+
+    def no_shared_error(self):
+        return f'Reference Error: shared not found (no shared on this firewall, use {self.DEFAULT_VSYS})'
 
     def location_params(self, location_object):
         return common.location_params(location_object)

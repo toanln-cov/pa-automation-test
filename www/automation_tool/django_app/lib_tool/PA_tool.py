@@ -103,7 +103,7 @@ def other_kind_duplicate(fw, kind, cache, ckey, host, token, loc, object, dup_rs
 
 #vsys object hiding a shared one: firewall accepts, warning only
 def shared_duplicate(fw, dup_func, getter, cache, host, token, loc, object, dup_rs):
-    if is_shared(loc) or dup_rs != 'No Duplicate':
+    if is_shared(loc) or dup_rs != 'No Duplicate' or not fw.has_shared():
         return dup_rs
     shared = fw.shared_location()
     known, not_read = cached_list(cache, (host, shared['@vsys']), getter, host, token, shared)
@@ -181,6 +181,10 @@ def vsys_label(fw, row_dict, loc):
 def is_shared(loc):
     return loc.get('location') == 'shared'
 
+#shared row on a firewall without shared
+def no_shared(fw, loc):
+    return is_shared(loc) and not fw.has_shared()
+
 #names on the firewall plus names created by earlier rows
 class DryRunContext:
     #lists and name compare rules come from the version class
@@ -217,7 +221,7 @@ class DryRunContext:
                     excluded = fw.REFERENCE_EXCLUDED.get(kind, ())
                     if is_shared(loc) and source not in fw.REFERENCE_SHARED:
                         continue                # zones, regions: not in shared
-                    for where in [loc] + ([fw.shared_location()] if source in fw.REFERENCE_SHARED and not is_shared(loc) else []):
+                    for where in [loc] + ([fw.shared_location()] if source in fw.REFERENCE_SHARED and not is_shared(loc) and fw.has_shared() else []):
                         entries, reason = read_entry_list(getattr(palib, source), host, token, where)
                         if entries is None:
                             names = None
@@ -233,17 +237,18 @@ class DryRunContext:
                     return None
                 found |= names
             self.firewall[key] = found
-        scopes = [loc['@vsys']] + ([] if is_shared(loc) else [fw.shared_location()['@vsys']])
+        scopes = [loc['@vsys']] + ([] if is_shared(loc) or not fw.has_shared() else [fw.shared_location()['@vsys']])
         created = set()
         for scope in scopes:
             created |= self.created.get((host, scope, kind), set()) | (self.created.get((host, scope, 'address'), set()) - self.created.get((host, scope, 'refused'), set()) if kind == 'address_member' else set())
         return self.firewall[key] | created
 
     #application: custom, group or filter, else predefined
+    #list not read: predefined still asked, not found is only a warning
     def application_known(self, host, token, loc, name):
         known = self.names('application', host, token, loc)
-        if known is None or name in known:
-            return known is not None
+        if known is not None and name in known:
+            return True
         if (host, name) not in self.predefined_apps:
             try:
                 self.predefined_apps[(host, name)] = palib.predefined_application_exists(host, token, name)
@@ -255,7 +260,7 @@ class DryRunContext:
                 if reason not in self.warnings:
                     self.warnings.append(reason)
                 return True
-        return self.predefined_apps[(host, name)]
+        return self.predefined_apps[(host, name)] or known is None
 
     def add(self, kind, host, loc, name):
         self.created.setdefault((host, loc['@vsys'], kind), set()).add(name)
@@ -442,7 +447,7 @@ def group_cycle(kind, groups, entry):
 #address types usable by NAT rows
 def address_types(fw, cache, host, token, loc, job):
     types = {}
-    for where in (fw.shared_location(), loc):           # vsys address hides the shared one
+    for where in ([fw.shared_location()] if fw.has_shared() else []) + [loc]:           # vsys address hides the shared one
         entries, not_read = cached_list(cache, ('addresses', host, where['@vsys']), palib.get_Objects_Addresses, host, token, where)
         types.update({e['@name']: next((t for t in fw.ADDRESS_TYPES if t in e), '') for e in entries})
     for (h, v, n), t in job.get('addr_types', {}).items():
@@ -507,6 +512,12 @@ def automatic_create(kind,username,password,input_excel_file_path,sheet,location
         builder, getter, create_call, dup_func, text, ctx_kind, move_call = fw.CREATE_KINDS[kind]
         loc = row_location(fw, row_dict, location_object)
         ckey = (host, loc['@vsys'])
+        if no_shared(fw, loc):
+            result = row_label(row_dict) + 'Device-IP: ' + str(host) + ' (' + vsys_label(fw, row_dict, loc) + f') | {text}: ' + shown(row_dict.get('Name')) + ' => ' + fw.no_shared_error()
+            final_result += result + '\n'
+            if log:
+                log(result)
+            continue
         check_mandatory_value = {'status': True, 'msg': ''}
         built = getattr(fw, builder)(row_dict, check_mandatory_value)
         object, compared = built if isinstance(built, tuple) else (built, built)      # service: timeouts not compared
