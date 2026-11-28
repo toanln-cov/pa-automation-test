@@ -2,7 +2,7 @@
 
 An automation tool with a web interface that helps administrators deploy configuration to Palo Alto Networks firewalls automatically from an Excel template, through the PAN-OS XML / REST API. Its features are completely different from Panorama, so it is not a replacement for Panorama. Panorama is a native Palo Alto product that provides a very comprehensive centralized management solution, with a strong binding between Panorama and the firewalls. This tool is only a helper for automated configuration, not a centralized management system for Palo Alto firewalls. In the future, I may add automated configuration for Panorama.
 
-[Features](#features) · [Limits](#what-the-tool-does-not-do) · [Build](#build-the-tool) · [Recommendations](#recommendations-for-setting-up-the-tool) · [Configuration](#initial-configuration-settings)
+[Features](#features) · [Limits](#what-the-tool-does-not-do) · [Build](#build-the-tool) · [Update](#update-and-stop) · [Recommendations](#recommendations-for-setting-up-the-tool) · [Configuration](#initial-configuration-settings)
 
 ## Purpose
 
@@ -65,6 +65,23 @@ Then open the tool at `https://<server-ip>:9198/` and sign in the first time wit
 The tool requires a password change at first login. The TLS certificate is generated automatically.
 
 How to use the tool is described in the tool's Guide page.
+
+## Update and stop
+
+The data is not inside the container. It is in 2 folders next to `docker-compose.yml`:
+
+- `data/`: web users database, secret key, TLS certificate, generated settings.
+- `jobs/` (or `PA_JOBS_DIR`): job history and results, `Auto-*.xml` backups.
+
+Removing or rebuilding the container keeps them.
+
+| Task | Command | Note |
+|---|---|---|
+| Update to a new version | `git pull` then `docker compose up -d --build` | No `down` needed: the container is recreated with the new image. Back up `data/` first, e.g. `cp -a data data.bak-$(date +%F)` |
+| Stop for a while | `docker compose stop` | Start again with `docker compose start` |
+| Stop and remove the container | `docker compose down` | `data/` and `jobs/` are kept |
+
+Do not delete `data/` or `jobs/`: the web users, the certificate and the job history would be lost.
 
 ## Recommendations for setting up the tool
 
