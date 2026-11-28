@@ -73,13 +73,11 @@ The data is not inside the container. It is in 2 folders next to `docker-compose
 - `data/`: web users database, secret key, TLS certificate, generated settings.
 - `jobs/` (or `PA_JOBS_DIR`): job history and results, `Auto-*.xml` backups.
 
-Removing or rebuilding the container keeps them.
-
-| Task | Command | Note |
-|---|---|---|
-| Update to a new version | `git pull` then `docker compose up -d --build` | No `down` needed: the container is recreated with the new image. Back up `data/` first, e.g. `cp -a data data.bak-$(date +%F)` |
-| Stop for a while | `docker compose stop` | Start again with `docker compose start` |
-| Stop and remove the container | `docker compose down` | `data/` and `jobs/` are kept |
+| Task                          | Command                                            | Note                                                                                                                                 |
+| ----------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Update to a new version       | `git pull` then `docker compose up -d --build` | No `down` needed: the container is recreated with the new image. Back up `data/` first, e.g. `cp -a data data.bak-$(date +%F)` |
+| Stop for a while              | `docker compose stop`                            | Start again with `docker compose start`                                                                                            |
+| Stop and remove the container | `docker compose down`                            | `data/` and `jobs/` are kept                                                                                                     |
 
 Do not delete `data/` or `jobs/`: the web users, the certificate and the job history would be lost.
 
