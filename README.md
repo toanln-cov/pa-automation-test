@@ -75,9 +75,11 @@ The data is not inside the container. It is in 2 folders next to `docker-compose
 
 | Task                          | Command                                            | Note                                                                                                                                 |
 | ----------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Update to a new version       | `git pull` then `docker compose up -d --build` | No `down` needed: the container is recreated with the new image. Back up `data/` first, e.g. `cp -a data data.bak-$(date +%F)` |
+| Update to a new version       | `git pull` then `docker compose up -d --build` | No `down` needed: the container is recreated with the new image. Back up `data/` first, e.g. `sudo cp -a data data.bak-$(date +%F)` |
 | Stop for a while              | `docker compose stop`                            | Start again with `docker compose start`                                                                                            |
 | Stop and remove the container | `docker compose down`                            | `data/` and `jobs/` are kept                                                                                                     |
+
+Both folders belong to `www-data` (uid 33) with mode 700, so the secret key and the TLS key stay private: copy them with `sudo`.
 
 Do not delete `data/` or `jobs/`: the web users, the certificate and the job history would be lost.
 
@@ -101,7 +103,7 @@ Recommendations for the environment that hosts the tool:
 6. **Verify the firewall certificates** with `APP_PANOS_CA_BUNDLE`.
 7. **Forward the audit log** to syslog / SIEM (`docker logs` is configured by default to keep only about 1 GB).
 8. **Update regularly**: new `ubuntu:24.04` digest, newer `APT_SNAPSHOT` in the Dockerfile, but `requirements.txt` must be regenerated, then rebuild and retest.
-9. **Back up** the data folders `./data/` and `./jobs/`.
+9. **Back up** the data folders `./data/` and `./jobs/` (with `sudo`, see [Update and stop](#update-and-stop)).
 
 ## Initial configuration settings
 
