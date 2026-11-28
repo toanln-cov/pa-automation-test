@@ -20,6 +20,7 @@ class PanOS11_1:
     DESCRIPTION_MAX_OBJECT = 1023                   # bytes in UTF-8, not characters
     DESCRIPTION_MAX_RULE = 1024
     TAG_MAX = 127
+    TAG_CHARS = re.compile(r'[^&<"\'\[\]\x00-\x1f\x7f]')     # REST refuses these in a tag name
     TAGS_MAX = 64
     ZONE_MAX = 31
     PROFILE_GROUP_MAX = 31
@@ -245,7 +246,10 @@ class PanOS11_1:
 
     def tag_name_error(self, value):
         text = str(value)
-        return f'max {self.TAG_MAX} characters, has {len(text)}' if len(text) > self.TAG_MAX else ''
+        if len(text) > self.TAG_MAX:
+            return f'max {self.TAG_MAX} characters, has {len(text)}'
+        bad = fields.bad_chars(text, self.TAG_CHARS)
+        return f'not allowed: {bad}' if bad else ''
 
     #Excel row to REST address entry
     def build_address(self, row_dict, check_mandatory_value):

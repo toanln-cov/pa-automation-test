@@ -3,7 +3,7 @@ import copy
 from . import palo_alto_api_lib as palib
 from .PA_tool import (read_sheet, sheet_rows, row_label, shown, row_errors, cached_list, row_location, check_position,
                       move_rule_to_position, move_text, DryRunContext, get_unique_device_and_token, allows_all, ALLOWS_ALL,
-                      is_shared, job_created, group_cycle, GROUP_MEMBERS, vsys_label, nat_wildcard_sources, note_wildcard, nat_static_fqdn, bare_ip_warnings)
+                      is_shared, rules_before, group_cycle, GROUP_MEMBERS, vsys_label, nat_wildcard_sources, note_wildcard, nat_static_fqdn, bare_ip_warnings)
 from .panos import fields
 
 MODE_KINDS = ('address_group', 'service_group', 'security_rule', 'nat_rule')
@@ -256,13 +256,14 @@ def automatic_edit(kind,username,password,input_excel_file_path,sheet,location_o
             new = copy.deepcopy(current)
             for key in fw.ENTRY_READ_ONLY:
                 new.pop(key, None)
-            made_groups = dry_ctx.entries.get((host, loc['@vsys'], 'address_group'), []) if dry_run else []
-            changed, refs = apply_row(fw, kind, row, modes, clears, new, check, warnings, host, token, loc, cache, made_groups)
+            made = {k: dry_ctx.entries.get((host, loc['@vsys'], k), []) if dry_run else [] for k in ('address_group', 'create_nat')}
+            changed, refs = apply_row(fw, kind, row, modes, clears, new, check, warnings, host, token, loc, cache, made)
 
         where, ref, move_wanted = '', '', False
         if check['status'] and kind in ('security_rule', 'nat_rule') and not fields.empty(row.get('Position')):
             rules = rule_order(cache, ckey, job, host, loc, kind, dry_run)
-            where, ref = check_position(fw, row, rules, name, check, not_read, dry_run, created=job_created(job, host, loc, kind))
+            existing = set() if not_read else rules_before(job, host, loc, kind, known)
+            where, ref = check_position(fw, row, existing, name, check, not_read, dry_run)
             where = where or 'bottom'
             if check['status']:
                 if already_at(rules, name, where, ref):
@@ -270,12 +271,13 @@ def automatic_edit(kind,username,password,input_excel_file_path,sheet,location_o
                 else:
                     move_wanted = True
 
-        #firewall refuses ip-wildcard as NAT Source-ip
-        if check['status'] and kind == 'nat_rule' and 'Source-ip' in modes:
-            wild = nat_wildcard_sources(fw, cache, host, token, loc, get_path(new, ('source', 'member')), job)
-            if wild:
-                check['status'] = False
-                check['msg'] += ' Source-ip: ' + ', '.join(f"'{w}'" for w in wild) + ' is an ip-wildcard address: not valid in a NAT rule +++'
+        #firewall refuses ip-wildcard as NAT Source-ip / Destination-ip
+        for key, col in (('source', 'Source-ip'), ('destination', 'Destination-ip')):
+            if check['status'] and kind == 'nat_rule' and col in modes:
+                wild = nat_wildcard_sources(fw, cache, host, token, loc, get_path(new, (key, 'member')), job)
+                if wild:
+                    check['status'] = False
+                    check['msg'] += f' {col}: ' + ', '.join(f"'{w}'" for w in wild) + ' is an ip-wildcard address: not valid in a NAT rule +++'
         if check['status'] and kind == 'nat_rule' and 'Destination-translation-type' in modes:
             fqdn = nat_static_fqdn(fw, cache, host, token, loc, new, job)
             if fqdn:
@@ -342,7 +344,7 @@ def edit_columns(fw, kind):
     return cols
 
 
-def apply_row(fw, kind, row, modes, clears, new, check, warnings, host, token, loc, cache, made_groups):
+def apply_row(fw, kind, row, modes, clears, new, check, warnings, host, token, loc, cache, made):
     changed, refs = False, {}
     rule = kind in ('security_rule', 'nat_rule')
     thing = 'rule' if rule else ('group' if kind.endswith('group') else 'object')
@@ -383,25 +385,32 @@ def apply_row(fw, kind, row, modes, clears, new, check, warnings, host, token, l
             changed |= done
             refs[col] = built
     if kind == 'address' and 'Type' in modes and 'Value' in modes and check['status']:
-        changed |= edit_address_value(fw, row, new, check, host, token, loc, cache, made_groups)
+        changed |= edit_address_value(fw, row, new, check, host, token, loc, cache, made)
     if kind == 'service' and check['status']:
         changed |= edit_service_protocol(fw, row, modes, clears, new, check)
     return changed, refs
 
 
-#firewall accepts ip-wildcard in a static group PUT but the commit fails
-def edit_address_value(fw, row, new, check, host, token, loc, cache, made_groups):
+#firewall accepts ip-wildcard in a static group / NAT source PUT but the commit fails
+def edit_address_value(fw, row, new, check, host, token, loc, cache, made):
     kind, value = str(row['Type']), str(row['Value'])
     old = {t: new[t] for t in fw.ADDRESS_TYPES if t in new}
     if old == {kind: value}:
         return False
     if kind == 'ip-wildcard':
         groups, not_read = cached_list(cache, ('groups', host, loc['@vsys']), palib.get_Objects_AddressGroups, host, token, loc)
-        inside = [g['@name'] for g in groups + made_groups if new['@name'] in fw.member_set(g.get('static'))]
+        inside = [g['@name'] for g in groups + made['address_group'] if new['@name'] in fw.member_set(g.get('static'))]
         if inside:
             check['status'] = False
             check['msg'] += f" Type: address object '{new['@name']}' is a member of group '{inside[0]}': ip-wildcard is not allowed in a static group +++"
             return False
+        nats, not_read = cached_list(cache, ('nat_rules', host, loc['@vsys']), palib.get_nat_rule, host, token, loc)
+        for key, col in (('source', 'Source-ip'), ('destination', 'Destination-ip')):
+            used = [r['@name'] for r in nats + made['create_nat'] if new['@name'] in fw.member_set(r.get(key))]
+            if used:
+                check['status'] = False
+                check['msg'] += f" Type: address object '{new['@name']}' is {col} of NAT rule '{used[0]}': ip-wildcard is not valid in a NAT rule +++"
+                return False
     for t in fw.ADDRESS_TYPES:
         new.pop(t, None)
     new[kind] = value

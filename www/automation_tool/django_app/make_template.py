@@ -27,7 +27,8 @@ def main():
             hint.alignment = Alignment(wrap_text=True, vertical='top')
             ws.column_dimensions[letter].width = c['width']
             if c['choices']:
-                dv = DataValidation(type='list', formula1=f'"{c["choices"]}"', allow_blank=True, showErrorMessage=False)
+                dv = DataValidation(type='list', formula1=f'"{c["choices"]}"', allow_blank=True, showErrorMessage=True,
+                                    errorTitle='Invalid value', error='Choose a value from the list.')
                 dv.add(f'{letter}2:{letter}{LAST_ROW}')
                 ws.add_data_validation(dv)
         ws.freeze_panes = 'A3'

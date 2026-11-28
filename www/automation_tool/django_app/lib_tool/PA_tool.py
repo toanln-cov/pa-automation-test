@@ -28,8 +28,11 @@ def sheet_rows(df):
 def row_label(row_dict):
     return f"Row {row_dict['_row']} | " if '_row' in row_dict else ''
 
+#line break / tab in a name shown as \n / \t, one result line per row
 def shown(value):
-    return '(empty)' if check_nan_value_no_except(value) else str(value)
+    if check_nan_value_no_except(value):
+        return '(empty)'
+    return ''.join(c if c.isprintable() else repr(c)[1:-1] for c in str(value))
 
 #short error summary of a row not sent
 def row_errors(msg, skipped=''):
@@ -110,7 +113,8 @@ def shared_duplicate(fw, dup_func, getter, cache, host, token, loc, object, dup_
     return dup_rs if found == 'No Duplicate' else f'{found} (shared)'
 
 #Position / Reference-rule, same as the PAN-OS move
-def check_position(fw, row_dict, list_rules, name, check_mandatory_value, not_read='', dry_run=False, created=()):
+#existing: rule names on the firewall before the job wrote anything
+def check_position(fw, row_dict, existing, name, check_mandatory_value, not_read='', dry_run=False):
     def cell(col):
         value = row_dict.get(col)
         return '' if check_nan_value_no_except(value) else str(value).strip()
@@ -132,9 +136,7 @@ def check_position(fw, row_dict, list_rules, name, check_mandatory_value, not_re
             error = f' {label}: duplicate / Reference-rule could not be checked ({not_read}) +++'
         else:
             error = f' {label}: Reference-rule could not be checked ({not_read}) +++'
-    elif ref and ref in created:
-        error = f" Reference-rule Input Error ('{ref}' is created by this file: Reference-rule must be a rule already on the firewall) +++"
-    elif ref and ref not in [r['@name'] for r in list_rules]:
+    elif ref and ref not in existing:
         error = f" Reference Error: Reference-rule '{ref}' not found on the firewall +++"
     if error:
         check_mandatory_value['status'] = False
@@ -449,7 +451,7 @@ def address_types(fw, cache, host, token, loc, job):
     return types
 
 
-#firewall refuses ip-wildcard as NAT Source-ip
+#firewall refuses ip-wildcard as NAT Source-ip / Destination-ip
 def nat_wildcard_sources(fw, cache, host, token, loc, sources, job):
     types = address_types(fw, cache, host, token, loc, job)
     return [s for s in sources if types.get(s) == 'ip-wildcard']
@@ -478,8 +480,9 @@ def note_wildcard(job, host, loc, entry):
     job.setdefault('addr_types', {})[(host, loc['@vsys'], entry['@name'])] = next((t for t in ('ip-netmask', 'ip-range', 'ip-wildcard', 'fqdn') if t in entry), '')
 
 
-def job_created(job, host, loc, kind):
-    return {name for h, v, k, name in job.get('created', ()) if (h, v, k) == (host, loc['@vsys'], kind)}
+#first rule list read in the job = before any write, same at Dry-run and Install
+def rules_before(job, host, loc, kind, rules):
+    return job.setdefault('rules_before', {}).setdefault((host, loc['@vsys'], kind), {r['@name'] for r in rules})
 
 
 #one add sheet
@@ -537,14 +540,15 @@ def automatic_create(kind,username,password,input_excel_file_path,sheet,location
 
         where, ref = '', ''
         if move_call:                           #--- Position / Reference-rule
-            where, ref = check_position(fw, row_dict, known + made, object['entry'].get('@name'), check_mandatory_value, not_read, dry_run,
-                                        created=job_created(job, host, loc, kind))
+            existing = set() if not_read else rules_before(job, host, loc, kind, known)
+            where, ref = check_position(fw, row_dict, existing, object['entry'].get('@name'), check_mandatory_value, not_read, dry_run)
 
         if kind == 'nat_rule' and check_mandatory_value['status'] == True:
-            wild = nat_wildcard_sources(fw, cache, host, token, loc, object['entry']['source']['member'], job)
-            if wild:
-                check_mandatory_value['status'] = False
-                check_mandatory_value['msg'] += ' Source-ip: ' + ', '.join(f"'{w}'" for w in wild) + ' is an ip-wildcard address: not valid in a NAT rule +++'
+            for key, col in (('source', 'Source-ip'), ('destination', 'Destination-ip')):
+                wild = nat_wildcard_sources(fw, cache, host, token, loc, object['entry'][key]['member'], job)
+                if wild:
+                    check_mandatory_value['status'] = False
+                    check_mandatory_value['msg'] += f' {col}: ' + ', '.join(f"'{w}'" for w in wild) + ' is an ip-wildcard address: not valid in a NAT rule +++'
             fqdn = nat_static_fqdn(fw, cache, host, token, loc, object['entry'], job)
             if fqdn:
                 check_mandatory_value['status'] = False
@@ -563,7 +567,6 @@ def automatic_create(kind,username,password,input_excel_file_path,sheet,location
             if fw.is_success(rs):
                 made.append(compared['entry'])
                 order = cache.setdefault(('order', ckey), known)
-                job.setdefault('created', set()).add((host, loc['@vsys'], kind, object['entry']['@name']))
                 if kind == 'address':
                     note_wildcard(job, host, loc, object['entry'])
                 if move_call:
