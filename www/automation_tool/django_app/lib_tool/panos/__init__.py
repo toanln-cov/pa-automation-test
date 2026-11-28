@@ -15,9 +15,10 @@ import re
 import threading
 from .common import new_session, FirewallError, xml_response, xml_api_msg, API_TIMEOUT
 from .v11_1 import PanOS11_1
+from .v10_1 import PanOS10_1
 
 # default class for versions without their own class
-API_CLASSES = {'11.1': PanOS11_1}
+API_CLASSES = {'11.1': PanOS11_1, '10.1': PanOS10_1}
 DEFAULT = PanOS11_1
 
 APIS = {}

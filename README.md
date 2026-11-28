@@ -43,7 +43,7 @@ Typical use: change requests that add or edit address objects, services, groups,
 | PAN-OS                         | Status                                                                         |
 | ------------------------------ | ------------------------------------------------------------------------------ |
 | 11.1 and later                 | Supported. Tested on 11.1.4 and 11.1.10.                                       |
-| 10.2, 10.1                     | Supported; use the 11.1 behavior until the differences are checked.            |
+| 10.2, 10.1                     | Supported; use the 11.1 behavior until the differences are checked (10.1 has its own class, same as 11.1 for now). |
 | 10.0, 9.1, 9.0 and older (EoL) | Not supported. May fail (for example the 9.0 REST URL has a different format). |
 
 ## Requirements
